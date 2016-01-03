@@ -158,7 +158,7 @@ void USART1_Configuration(void)
 
 void USART1_puts(char* s)
 {
-    while(*s) {
+    while(*s != '\0') {
         while(USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET);
         USART_SendData(USART1, *s);
         s++;
@@ -188,16 +188,19 @@ void command_detect(char *str)
 	TIM4->CCR1 = number;
 }
 
-void uart1command(char *buffer) {
+void uart1command() {
+	char buffer[50];
 	int index = 0;
+	char c;
 	while (1) {
+		// Receive character
 		while (USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET);
-		buffer[index] = USART_ReceiveData(USART1);
-		if (buffer[index] == 13) {
-			USART1_puts("\0");
+		c = USART_ReceiveData(USART1);
+		if (c == '\r' || c == '\n') {	
 			buffer[index] = '\0';
+			USART1_puts(buffer);
 			command_detect(buffer);
-			break;
+			index = 0;
 		} else if (buffer[index] == 8 || buffer[index] == 127) {
 			if (index != 0) {
 				USART1_puts("\b");
@@ -205,28 +208,20 @@ void uart1command(char *buffer) {
 				USART1_puts("\b");
 				index--;
 			}
-		} else {
-			USART1_puts(&buffer[index++]);
 		}
-		if (index == 50)
-			index--;
+		else{
+			buffer[index++] = c;
+		}
+		if(index == 50)
+			index = 0;
 	}
 }
 
 void UART1Task(void *pvParameters)
 {
-	char buffer[50];
-	USART1_puts("Hello World!\r\n");
-	USART1_puts("Just for STM32F429I Discovery verify USART1 with USB TTL Cable\r\n");
-	while (1) {
-//		while (lock);
-		uart1command(buffer);
-		USART1_puts("\n");
-
-	}
-
-	while (1)
-		; // Don't want to exit
+	USART1_puts("Hello World!\r\n\0");
+	USART1_puts("Just for STM32F429I Discovery verify USART1 with USB TTL Cable\r\n\0");
+	uart1command();
 }
 
 void PWMTask(void *pvParameters)
