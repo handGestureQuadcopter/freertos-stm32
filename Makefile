@@ -89,8 +89,10 @@ OBJS += \
     $(PWD)/Utilities/STM32F429I-Discovery/stm32f429i_discovery_lcd.o \
     $(PWD)/Utilities/STM32F429I-Discovery/stm32f429i_discovery_ioe.o
 
-# Traffic
-CFLAGS += -I $(PWD)/CORTEX_M4F_STM32F4/traffic/include
+# Quadcopter
+OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/motor.o
+OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/uart.o
+CFLAGS += -I $(PWD)/CORTEX_M4F_STM32F4/quadcopter/include
 
 CFLAGS += -DUSE_STDPERIPH_DRIVER
 CFLAGS += -I $(PWD)/CORTEX_M4F_STM32F4 \
