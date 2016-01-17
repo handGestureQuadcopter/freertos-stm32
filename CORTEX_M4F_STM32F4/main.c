@@ -24,11 +24,6 @@
   *
   ******************************************************************************
   */
-
-/* Includes ------------------------------------------------------------------*/
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
  
 #include "main.h"
 #include "uart.h"
@@ -41,23 +36,12 @@
 
 MotorSpeed_t motorspeed;
 
-void prvInit()
-{
-	//LCD init
-	IOE_Config();
-	LTDC_Cmd( ENABLE );
-
-	//Button
-	STM_EVAL_PBInit( BUTTON_USER, BUTTON_MODE_GPIO );
-}
-
 //Main Function
 int main(void)
 {
 	//Configurations
 	Init_UART1();
 	Init_Motor();
-	prvInit();
 
 	xTaskCreate(UART1Task, "UART1", 256,
 		(void *)NULL, tskIDLE_PRIORITY + 1, (void *)NULL);
