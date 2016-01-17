@@ -11,7 +11,7 @@ static TM_MPU6050_t MPU6050_Data;
 
 TickType_t xLastWakeTime;
 TickType_t const xFrequency = 100 / portTICK_PERIOD_MS;
-float const dt = 0.3f;
+float const dt = 0.33f;
 
 Kalman kalmanX; // Create the Kalman instances
 Kalman kalmanY;
@@ -19,8 +19,7 @@ Kalman kalmanY;
 /* IMU Data */
 float accX, accY, accZ;
 float gyroX, gyroY;
-
-float kalAngleX, kalAngleY; // Calculated angle using a Kalman filter
+Kalman_Angel_Data K_Data;
 
 void MPU6050Task(void) {
 	char uart_out[32];
@@ -34,7 +33,8 @@ void MPU6050Task(void) {
 	accZ = MPU6050_Data.Accelerometer_Z;
 
 	float roll = atan2(-accY, accZ) * RAD_TO_DEG;
-	float pitch = atan(-accX / sqrt1(Square(accY) + Square(accZ))) * RAD_TO_DEG;
+	float pitch = atan(-accX /
+			sqrt1(Square(accY) + Square(accZ))) * RAD_TO_DEG;
 
 	setAngle(&kalmanX, roll); // Set starting angle
 	setAngle(&kalmanY, pitch);
@@ -57,19 +57,19 @@ void MPU6050Task(void) {
 		float gyroYrate = gyroY * MPU6050_Data.Gyro_Mult; // Convert to deg/s
 
 		// This fixes the transition problem when the accelerometer angle jumps between -180 and 180 degrees
-		if ((roll < -90 && kalAngleX > 90) || (roll > 90 && kalAngleX < -90)) {
+		if ((roll < -90 && K_Data.kalAngleX > 90) || (roll > 90 && K_Data.kalAngleX < -90)) {
 			setAngle(&kalmanX, roll);
 		} else {
-			kalAngleX = getAngle(&kalmanX, roll, gyroXrate, dt); // Calculate the angle using a Kalman filter
+			K_Data.kalAngleX = getAngle(&kalmanX, roll, gyroXrate, dt); // Calculate the angle using a Kalman filter
 		}
 
-		if (Abs(kalAngleX) > 90)
+		if (Abs(K_Data.kalAngleX) > 90)
 			gyroYrate = -gyroYrate; // Invert rate, so it fits the restriced accelerometer reading
-		kalAngleY = getAngle(&kalmanY, pitch, gyroYrate, dt);
+		K_Data.kalAngleY = getAngle(&kalmanY, pitch, gyroYrate, dt);
 
-		UART1_puts("\r\n");
-		shell_float2str(kalAngleX, uart_out);
-		UART1_puts(uart_out);
+//		UART1_puts("\r\n");
+//		shell_float2str(K_Data.kalAngleX, uart_out);
+//		UART1_puts(uart_out);
 
 		vTaskDelayUntil(&xLastWakeTime, xFrequency);
 	}

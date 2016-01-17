@@ -13,6 +13,11 @@ extern C {
 #include "stm32f4xx_rcc.h"
 #include "stm32f4xx_gpio.h"
 
+typedef struct {
+	float kalAngleX;
+	float kalAngleY; // Calculated angle using a Kalman filter
+}Kalman_Angel_Data;
+
 #define RAD_TO_DEG 57.295779513082320876798154814105f
 
 #define wGyro 5
