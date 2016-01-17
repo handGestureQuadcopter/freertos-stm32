@@ -85,10 +85,10 @@ void Init_Motor()
 	PWM_GPIO_Configuration();
 
 	UART1_puts("Motor Init\r\n\0");
-	motorspeed.motor1_speed = 0;
-	motorspeed.motor2_speed = 0;
-	motorspeed.motor3_speed = 0;
-	motorspeed.motor4_speed = 0;
+	motorspeed.motor1_speed = 240;
+	motorspeed.motor2_speed = 240;
+	motorspeed.motor3_speed = 240;
+	motorspeed.motor4_speed = 240;
 	motorspeed.magicNumber1 = 0;
 	motorspeed.magicNumber2 = 0;
 	motorspeed.magicNumber3 = 0;
@@ -97,10 +97,10 @@ void Init_Motor()
 
 void Change_Speed()
 {
-	TIM4->CCR1 = motorspeed.motor1_speed + motorspeed.magicNumber1;
-	TIM4->CCR2 = motorspeed.motor2_speed + motorspeed.magicNumber2;
-	TIM4->CCR3 = motorspeed.motor3_speed + motorspeed.magicNumber3;
-	TIM4->CCR4 = motorspeed.motor4_speed + motorspeed.magicNumber4;
+	TIM4->CCR1 = MIN_MAX(motorspeed.motor1_speed + motorspeed.magicNumber1);
+	TIM4->CCR2 = MIN_MAX(motorspeed.motor2_speed + motorspeed.magicNumber2);
+	TIM4->CCR3 = MIN_MAX(motorspeed.motor3_speed + motorspeed.magicNumber3);
+	TIM4->CCR4 = MIN_MAX(motorspeed.motor4_speed + motorspeed.magicNumber4);
 	UART1_puts("channel 1 2 3 4 : \0");
 	UART1_int(TIM4->CCR1);UART1_puts(" ");
 	UART1_int(TIM4->CCR2);UART1_puts(" ");
