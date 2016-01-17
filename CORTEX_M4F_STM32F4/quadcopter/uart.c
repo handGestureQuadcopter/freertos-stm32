@@ -1,6 +1,9 @@
 #include "uart.h"
 #include "motor.h"
 
+char buffer[MAX_UART_INPUT];
+uint8_t buffer_index = 0;
+
 void UART1_RCC_Configuration()
 {
 	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
@@ -39,6 +42,10 @@ void UART1_Configuration()
 	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
 	USART_Init(USART1, &USART_InitStructure);
 	USART_Cmd(USART1, ENABLE);
+
+	/* enable uart interrupt while receiving char */
+	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+	NVIC_EnableIRQ(USART1_IRQn);
 }
 
 void Init_UART1()
@@ -73,30 +80,24 @@ void UART1_int(uint16_t num)
 	UART1_puts(&intArray[i]);
 }
 
-void uart1command() 
-{
-	char buffer[50];
-	int index = 0;
-	char c;
-	while (1) {
-		// Receive character
-		while (USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET);
-		c = USART_ReceiveData(USART1);
-		if (c == '\r' || c == '\n') {	
-			buffer[index] = '\0';
-			UART1_puts(buffer);
-			remote_ctrl(buffer);
-			index = 0;
-		} else{
-			buffer[index++] = c;
-		}
-		if(index == 50)
-			index = 0;
+void USART1_IRQHandler() {
+	/*
+	 * read a line from uart1
+	 */
+	UART1_ReadLine();
+}
+
+void UART1_ReadLine() {
+	while (USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET);
+	char c = USART_ReceiveData(USART1);
+	if (c == '\r' || c == '\n') {
+		buffer[buffer_index] = '\0';
+		UART1_puts(buffer);
+		remote_ctrl(buffer);
+		buffer_index = 0;
+	} else {
+		buffer[buffer_index++] = c;
 	}
+	if (buffer_index == 50)
+		buffer_index = 0;
 }
-
-void UART1Task(void *pvParameters)
-{
-	uart1command();
-}
-
