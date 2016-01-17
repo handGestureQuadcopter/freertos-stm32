@@ -95,7 +95,7 @@ void Init_Motor()
 	motorspeed.magicNumber4 = 0;
 }
 
-void change_speed()
+void Change_Speed()
 {
 	TIM4->CCR1 = motorspeed.motor1_speed + motorspeed.magicNumber1;
 	TIM4->CCR2 = motorspeed.motor2_speed + motorspeed.magicNumber2;
@@ -160,5 +160,5 @@ void remote_ctrl(char *str)
 			motorspeed.motor3_speed = speed;
 			motorspeed.motor4_speed = speed;		
 	}
-	change_speed();
+	Change_Speed();
 }
