@@ -27,7 +27,7 @@
  
 #include "main.h"
 #include "uart.h"
-#include "motor.h"
+#include "pid.h"
 #include "mpu6050.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -48,6 +48,9 @@ int main(void)
 	if (!MPU6050_Task_Creat()) {
 		UART1_puts("Initialize information task failed!\r\n");
 	}
-	
+	if (!PID_Task_Creat()) {
+		UART1_puts("Initialize information task failed!\r\n");
+	}
+
 	vTaskStartScheduler();
 }

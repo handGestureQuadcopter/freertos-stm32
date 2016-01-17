@@ -4,9 +4,9 @@
 #include "task.h"
 
 //PID define
-#define dt (100/portTICK_RATE_MS)
-#define KP 0.5
-#define KI 1
+#define dt (1000/portTICK_RATE_MS)
+#define KP 0.1
+#define KI 0
 #define KD 0
 #define SETPOINT_X 0.5
 #define SETPOINT_Y 0.5
