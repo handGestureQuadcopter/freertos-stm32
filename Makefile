@@ -60,12 +60,12 @@ OBJS += \
       #$(PWD)/CORTEX_M4F_STM32F4/stm32f4xx_it.o \
 
 OBJS += \
-      $(PWD)/croutine.o \
-      $(PWD)/event_groups.o \
-      $(PWD)/list.o \
-      $(PWD)/queue.o \
-      $(PWD)/tasks.o \
-      $(PWD)/timers.o \
+      $(PWD)/Utilities/Third_Party/free-rtos/croutine.o \
+      $(PWD)/Utilities/Third_Party/free-rtos/event_groups.o \
+      $(PWD)/Utilities/Third_Party/free-rtos/list.o \
+      $(PWD)/Utilities/Third_Party/free-rtos/queue.o \
+      $(PWD)/Utilities/Third_Party/free-rtos/tasks.o \
+      $(PWD)/Utilities/Third_Party/free-rtos/timers.o \
       $(PWD)/portable/GCC/ARM_CM4F/port.o \
       $(PWD)/portable/MemMang/heap_1.o \
 
