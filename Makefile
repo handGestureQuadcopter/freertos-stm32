@@ -92,6 +92,7 @@ OBJS += \
 # Quadcopter
 OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/motor.o
 OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/uart.o
+OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/pid.o
 OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/MPU6050/i2c.o
 OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/MPU6050/mpu6050.o
 OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/MPU6050/kalman.o
