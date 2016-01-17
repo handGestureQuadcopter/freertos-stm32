@@ -223,3 +223,13 @@ uint8_t MPU6050_Task_Creat() {
 		return 0;
 	return 1;
 }
+
+void Init_MPU6050() {
+	/* Initialize MPU6050 sensor 0, address = 0xD0, AD0 pin on sensor is low */
+	while (MPU6050_Init(TM_MPU6050_Accelerometer_4G, TM_MPU6050_Gyroscope_250s)
+			!= TM_MPU6050_Result_Ok) {
+		/* Display message to user */
+		UART1_puts("\r\nRemote is NOT READY! PLEASE Checkout.");
+	}
+	UART1_puts("\r\nRemote is ready to use!");
+}

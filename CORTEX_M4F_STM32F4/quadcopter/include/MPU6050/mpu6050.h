@@ -196,6 +196,8 @@ TM_MPU6050_Result_t MPU6050_ReadAccGyo();
 uint8_t MPU6050_I2C_IsDeviceConnected(uint8_t address);
 
 uint8_t MPU6050_Task_Creat();
+
+void Init_MPU6050();
  
 /**
  * @}
