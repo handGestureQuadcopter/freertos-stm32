@@ -11,7 +11,7 @@ static TM_MPU6050_t MPU6050_Data;
 
 TickType_t xLastWakeTime;
 TickType_t const xFrequency = 100 / portTICK_PERIOD_MS;
-float const dt = 0.33f;
+float const dt = 0.3f;
 
 Kalman kalmanX; // Create the Kalman instances
 Kalman kalmanY;
@@ -68,7 +68,7 @@ void MPU6050Task(void) {
 		K_Data.kalAngleY = getAngle(&kalmanY, pitch, gyroYrate, dt);
 
 //		UART1_puts("\r\n");
-//		shell_float2str(K_Data.kalAngleX, uart_out);
+//		shell_float2str(gyroXrate, uart_out);
 //		UART1_puts(uart_out);
 
 		vTaskDelayUntil(&xLastWakeTime, xFrequency);
