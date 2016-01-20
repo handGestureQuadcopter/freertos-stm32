@@ -92,7 +92,6 @@ void UART1_ReadLine() {
 	char c = USART_ReceiveData(USART1);
 	if (c == '\r' || c == '\n') {
 		buffer[buffer_index] = '\0';
-		UART1_puts(buffer);
 		remote_ctrl(buffer);
 		buffer_index = 0;
 	} else {

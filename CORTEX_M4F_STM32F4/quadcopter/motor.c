@@ -101,7 +101,7 @@ void Change_Speed()
 	TIM4->CCR2 = MIN_MAX(motorspeed.motor2_speed + motorspeed.magicNumber2);
 	TIM4->CCR3 = MIN_MAX(motorspeed.motor3_speed + motorspeed.magicNumber3);
 	TIM4->CCR4 = MIN_MAX(motorspeed.motor4_speed + motorspeed.magicNumber4);
-	UART1_puts("channel 1 2 3 4 : \0");
+	UART1_puts("\r\nchannel 1 2 3 4 : \0");
 	UART1_int(TIM4->CCR1);UART1_puts(" ");
 	UART1_int(TIM4->CCR2);UART1_puts(" ");
 	UART1_int(TIM4->CCR3);UART1_puts(" ");
