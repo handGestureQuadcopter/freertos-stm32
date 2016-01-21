@@ -19,6 +19,7 @@ Kalman kalmanY;
 /* IMU Data */
 float accX, accY, accZ;
 float gyroX, gyroY;
+float kalAngelX, kalAngelY;
 Kalman_Angel_Data K_Data;
 
 void MPU6050Task(void) {
@@ -33,8 +34,7 @@ void MPU6050Task(void) {
 	accZ = MPU6050_Data.Accelerometer_Z;
 
 	float roll = atan2(-accY, accZ) * RAD_TO_DEG;
-	float pitch = atan(-accX /
-			sqrt1(Square(accY) + Square(accZ))) * RAD_TO_DEG;
+	float pitch = atan(-accX / sqrt1(Square(accY) + Square(accZ))) * RAD_TO_DEG;
 
 	setAngle(&kalmanX, roll); // Set starting angle
 	setAngle(&kalmanY, pitch);
@@ -57,18 +57,24 @@ void MPU6050Task(void) {
 		float gyroYrate = gyroY * MPU6050_Data.Gyro_Mult; // Convert to deg/s
 
 		// This fixes the transition problem when the accelerometer angle jumps between -180 and 180 degrees
-		if ((roll < -90 && K_Data.kalAngleX > 90) || (roll > 90 && K_Data.kalAngleX < -90)) {
+		if ((roll < -90 && kalAngelX > 90) || (roll > 90 && kalAngelX < -90)) {
 			setAngle(&kalmanX, roll);
 		} else {
-			K_Data.kalAngleX = getAngle(&kalmanX, roll, gyroXrate, dt); // Calculate the angle using a Kalman filter
+			kalAngelX = getAngle(&kalmanX, roll, gyroXrate, dt); // Calculate the angle using a Kalman filter
 		}
 
-		if (Abs(K_Data.kalAngleX) > 90)
+		if (Abs(kalAngelX) > 90)
 			gyroYrate = -gyroYrate; // Invert rate, so it fits the restriced accelerometer reading
-		K_Data.kalAngleY = getAngle(&kalmanY, pitch, gyroYrate, dt);
+		kalAngelY = getAngle(&kalmanY, pitch, gyroYrate, dt);
 
+		taskENTER_CRITICAL();
+		K_Data.kalAngleX = kalAngelX;
+		K_Data.kalAngleY = kalAngelY;
+//		K_Data.kalAngleX = roll;
+//		K_Data.kalAngleY = pitch;
+		taskEXIT_CRITICAL();
 //		UART1_puts("\r\n");
-//		shell_float2str(gyroXrate, uart_out);
+//		shell_float2str(kalAngelX, uart_out);
 //		UART1_puts(uart_out);
 
 		vTaskDelayUntil(&xLastWakeTime, xFrequency);

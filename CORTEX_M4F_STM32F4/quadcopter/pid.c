@@ -3,6 +3,8 @@
 extern MotorSpeed_t motorspeed;
 extern Kalman_Angel_Data K_Data;
 
+float roll, pitch;
+
 uint8_t PID_Task_Creat() {
 	BaseType_t ret = xTaskCreate(PIDTask,"PID",512,(void *) NULL,tskIDLE_PRIORITY + 4,(void *) NULL);
 	if (ret != pdPASS)  
@@ -27,15 +29,21 @@ void  PIDTask()
 	integral_Y = 0;
 
 	while(1){
+
+		taskENTER_CRITICAL();
+		roll = K_Data.kalAngleX;
+		pitch = K_Data.kalAngleY;
+		taskEXIT_CRITICAL();
+
 		//x axis	
-		error_X = calculateP_X();
+		error_X = calculateP_X(roll);
 		integral_X = calculateI(integral_X, error_X);
 		derivative_X = calculateD(error_X, pre_error_X);
 		PID_X(error_X,integral_X,derivative_X);
 		pre_error_X = error_X;
 
 		//y axis
-		error_Y = calculateP_Y();
+		error_Y = calculateP_Y(pitch);
 		integral_Y = calculateI(integral_Y, error_Y);
 		derivative_Y = calculateD(error_Y, pre_error_Y);
 		PID_Y(error_Y,integral_Y,derivative_Y);
@@ -46,17 +54,17 @@ void  PIDTask()
 	}
 }
 
-float calculateP_X()
+float calculateP_X(float roll)
 {
-	int16_t error;
-	error = K_Data.kalAngleX - SETPOINT_X;
+	float error;
+	error = roll - SETPOINT_X;
 	return error;
 }
 
-float calculateP_Y()
-{            
-        float error; 
-        error = K_Data.kalAngleY - SETPOINT_Y;
+float calculateP_Y(float pitch)
+{
+	float error;
+	error = pitch - SETPOINT_Y;
 	return error;
 }
 
@@ -77,9 +85,9 @@ void PID_X(float error, float integral, float derivative)
 	output = (KP * error) + (KI * integral) + (KD * derivative);
 
 	motorspeed.magicNumber1 -= output;
-        motorspeed.magicNumber2 += output;
-        motorspeed.magicNumber3 += output;
-        motorspeed.magicNumber4 -= output; 
+	motorspeed.magicNumber2 += output;
+	motorspeed.magicNumber3 += output;
+	motorspeed.magicNumber4 -= output;
 }
 
 void PID_Y(float error, float integral, float derivative)
