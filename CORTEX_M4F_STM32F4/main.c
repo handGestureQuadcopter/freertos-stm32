@@ -35,20 +35,20 @@
 
 #include "stm32f4xx_conf.h"
 
-MotorSpeed_t motorspeed;
+TaskHandle_t PID_xHandle;
 
 //Main Function
 int main(void)
 {
 	//Configurations
 	Init_UART1();
-	Init_Motor();
+	Init_Motor(PID_xHandle);
 	Init_MPU6050();
-
+	
 	if (!MPU6050_Task_Creat()) {
 		UART1_puts("Initialize information task failed!\r\n");
 	}
-	if (!PID_Task_Creat()) {
+	if (!PID_Task_Creat(PID_xHandle)) {
 		UART1_puts("Initialize information task failed!\r\n");
 	}
 
