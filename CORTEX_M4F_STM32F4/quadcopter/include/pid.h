@@ -4,15 +4,17 @@
 #include "task.h"
 
 //PID define
-#define dt (200/portTICK_RATE_MS)
-#define KP 0.27f
+#define dt (100/portTICK_RATE_MS)
+#define KP 0.12f
 #define KI 0
-#define KD 0
-#define SETPOINT_X 0.5
-#define SETPOINT_Y 0.5
+#define KD 50
+#define SETPOINT_X 3
+#define SETPOINT_Y 0
+#define PID_BOUND(Correction) ((Correction > 10 ? 10 : Correction) < -10 ? -10 : Correction )
 
 void PIDTask();
-uint8_t PID_Task_Creat();
+uint8_t PID_Task_Creat(TaskHandle_t xHandle);
+float bound_check(float value);
 float calculateP_X(float roll);
 float calculateP_Y(float pitch);
 float calculateI(float integral, float error);
