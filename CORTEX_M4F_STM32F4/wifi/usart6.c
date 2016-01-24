@@ -1,13 +1,16 @@
 #include "usart6.h"
-//#include "esp8266.h"
+#include "usart1.h"
 #include "stm32f4xx_conf.h"
+
+char buffer6[100];
+uint8_t buffer6_index = 0;
 
 void USART6_Configuration(void)
 {
     USART_InitTypeDef USART_InitStructure;
     GPIO_InitTypeDef GPIO_InitStructure;
     /* --------------------------- System Clocks Configuration -----------------*/
-    /* USART2 clock enable */
+    /* USART6 clock enable */
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART6, ENABLE);
     /* GPIOA clock enable */
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);
@@ -20,8 +23,8 @@ void USART6_Configuration(void)
     GPIO_Init(GPIOC, &GPIO_InitStructure);
 
     /* Connect USART pins to AF */
-    GPIO_PinAFConfig(GPIOC, GPIO_PinSource6, GPIO_AF_USART6);   // USART2_TX
-    GPIO_PinAFConfig(GPIOC, GPIO_PinSource7, GPIO_AF_USART6);  // USART2_RX
+    GPIO_PinAFConfig(GPIOC, GPIO_PinSource6, GPIO_AF_USART6);   // USART6_TX
+    GPIO_PinAFConfig(GPIOC, GPIO_PinSource7, GPIO_AF_USART6);   // USART6_RX
 
 
     /* USARTx configuration ------------------------------------------------------*/
@@ -41,6 +44,9 @@ void USART6_Configuration(void)
     USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
     USART_Init(USART6, &USART_InitStructure);
     USART_Cmd(USART6, ENABLE);
+
+    USART_ITConfig(USART6, USART_IT_RXNE, ENABLE);
+    NVIC_EnableIRQ(USART6_IRQn);
 }
 
 void USART6_puts(char* s)
@@ -50,4 +56,26 @@ void USART6_puts(char* s)
         USART_SendData(USART6, *s);
         s++;
     }
+}
+
+void USART6_IRQHandler() {
+	/*
+	 * read a line from uart1
+	 */
+	UART6_ReadLine();
+}
+
+void UART6_ReadLine() {
+	while (USART_GetFlagStatus(USART6, USART_FLAG_RXNE) == RESET);
+	char c = USART_ReceiveData(USART6);	
+	if (c == '\n') {
+		buffer6[buffer6_index++] = '\n';
+		buffer6[buffer6_index] = '\0';
+		USART1_puts(buffer6);
+		buffer6_index = 0;
+	} else {
+		buffer6[buffer6_index++] = c;
+	}
+	if (buffer6_index == 100)
+		buffer6_index = 0;
 }

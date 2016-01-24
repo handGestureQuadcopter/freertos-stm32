@@ -1,7 +1,10 @@
 #include "usart1.h"
-//#include "esp8266.h"
+#include "usart6.h"
+#include <string.h>
 #include "stm32f4xx_conf.h"
 
+char buffer[100];
+int buffer_index = 0;
 
 void USART1_Configuration(void)
 {
@@ -18,6 +21,7 @@ void USART1_Configuration(void)
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9 | GPIO_Pin_10;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
     GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
@@ -41,6 +45,9 @@ void USART1_Configuration(void)
     USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
     USART_Init(USART1, &USART_InitStructure);
     USART_Cmd(USART1, ENABLE);
+
+    USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+    NVIC_EnableIRQ(USART1_IRQn);
 }
 
 void USART1_puts(char* s)
@@ -51,3 +58,20 @@ void USART1_puts(char* s)
         s++;
     }
 }
+
+void USART1_IRQHandler() {
+	/*
+	 * read a line from uart1
+	 */
+	USART1_ReadLine();
+}
+
+void USART1_ReadLine() {
+	
+
+	while (USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET);
+	char c = USART_ReceiveData(USART1);
+	USART6_puts(&c);
+}
+
+
