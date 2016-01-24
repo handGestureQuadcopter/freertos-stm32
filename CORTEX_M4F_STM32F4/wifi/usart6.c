@@ -3,8 +3,9 @@
 #include "stm32f4xx_conf.h"
 
 char buffer6[100];
+char buffer7[100];
 uint8_t buffer6_index = 0;
-
+uint8_t buffer7_index = 0;
 void USART6_Configuration(void)
 {
     USART_InitTypeDef USART_InitStructure;
@@ -69,6 +70,7 @@ void UART6_ReadLine() {
 	while (USART_GetFlagStatus(USART6, USART_FLAG_RXNE) == RESET);
 	char c = USART_ReceiveData(USART6);	
 	if (c == '\n') {
+		buffer6[buffer6_index++] = '\r';
 		buffer6[buffer6_index++] = '\n';
 		buffer6[buffer6_index] = '\0';
 		USART1_puts(buffer6);

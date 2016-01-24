@@ -4,7 +4,8 @@
 #include "stm32f4xx_conf.h"
 
 char buffer[100];
-int buffer_index = 0;
+uint8_t buffer_index = 0;
+uint8_t rxFlag = 0;
 
 void USART1_Configuration(void)
 {
@@ -68,9 +69,20 @@ void USART1_IRQHandler() {
 
 void USART1_ReadLine() {
 	
-
+	char _xx = "";
+	extern int OKflag;
 	while (USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET);
 	char c = USART_ReceiveData(USART1);
+	if (rxFlag) {
+		_xx = c;
+		rxFlag = 0;
+	} else if (c=='K'){
+		OKflag =1;
+	} else if (c == ':') {
+		rxFlag = 1;
+	}
+	
+	USART6_puts(&_xx);
 	USART6_puts(&c);
 }
 

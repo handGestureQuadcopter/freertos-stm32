@@ -1,5 +1,5 @@
 #include "stm32f4xx_conf.h"
 
-int AP_Init();
+void AP_Init();
 
-char receiveString_Parse(char*)
+//char receiveString_Parse(char*)
