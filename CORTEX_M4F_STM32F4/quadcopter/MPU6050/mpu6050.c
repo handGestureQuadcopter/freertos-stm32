@@ -5,13 +5,17 @@
 #include "uart.h"
 
 #define Square(x) ((x)*(x))
-#define Abs(x) ((x < 0) ? -x : x )
+#define Abs(x) ((x < 0) ? (0-x) : x)
+#define Average(x, y) ((x + y) / 2) 
+#define ANGLE_DEV 20
+#define kal
 
 static TM_MPU6050_t MPU6050_Data;
 
 TickType_t xLastWakeTime;
-TickType_t const xFrequency = 100 / portTICK_PERIOD_MS;
-float const dt = 0.33f;
+TickType_t const xFrequency = 25 / portTICK_PERIOD_MS;
+float const dt = 25 / portTICK_PERIOD_MS;
+//float const dt = 0.075f;
 
 Kalman kalmanX; // Create the Kalman instances
 Kalman kalmanY;
@@ -19,10 +23,14 @@ Kalman kalmanY;
 /* IMU Data */
 float accX, accY, accZ;
 float gyroX, gyroY;
+float kalAngleX, kalAngleY;
+float pre_kalAngleX, pre_kalAngleY;
 Kalman_Angel_Data K_Data;
 
 void MPU6050Task(void) {
 	char uart_out[32];
+	uint8_t count_R = 10;
+	uint8_t count_P = 10;
 
 	initKalman(&kalmanX);
 	initKalman(&kalmanY);
@@ -33,12 +41,14 @@ void MPU6050Task(void) {
 	accZ = MPU6050_Data.Accelerometer_Z;
 
 	float roll = atan2(-accY, accZ) * RAD_TO_DEG;
-	float pitch = atan(-accX /
-			sqrt1(Square(accY) + Square(accZ))) * RAD_TO_DEG;
+	float pitch = atan(-accX / sqrt1(Square(accY) + Square(accZ))) * RAD_TO_DEG;
 
 	setAngle(&kalmanX, roll); // Set starting angle
 	setAngle(&kalmanY, pitch);
-
+	pre_kalAngleX = 0;
+	pre_kalAngleY = 0;
+	kalAngleX = 0;
+	kalAngleY = 0;
 	while (1) {
 
 		/* Read all data from sensor */
@@ -57,20 +67,60 @@ void MPU6050Task(void) {
 		float gyroYrate = gyroY * MPU6050_Data.Gyro_Mult; // Convert to deg/s
 
 		// This fixes the transition problem when the accelerometer angle jumps between -180 and 180 degrees
-		if ((roll < -90 && K_Data.kalAngleX > 90) || (roll > 90 && K_Data.kalAngleX < -90)) {
+		if ((roll < -90 && kalAngleX > 90) || (roll > 90 && kalAngleX < -90)) {
 			setAngle(&kalmanX, roll);
 		} else {
-			K_Data.kalAngleX = getAngle(&kalmanX, roll, gyroXrate, dt); // Calculate the angle using a Kalman filter
+			kalAngleX = getAngle(&kalmanX, roll, gyroXrate, dt); // Calculate the angle using a Kalman filter
 		}
 
-		if (Abs(K_Data.kalAngleX) > 90)
+		if (Abs(kalAngleX) > 90)
 			gyroYrate = -gyroYrate; // Invert rate, so it fits the restriced accelerometer reading
-		K_Data.kalAngleY = getAngle(&kalmanY, pitch, gyroYrate, dt);
+		kalAngleY = getAngle(&kalmanY, pitch, gyroYrate, dt);
 
-//		UART1_puts("\r\n");
-//		shell_float2str(K_Data.kalAngleX, uart_out);
-//		UART1_puts(uart_out);
+		if (count_R > 0) {
+			count_R--;
+		} else if (Abs(Abs(pre_kalAngleX) - Abs(kalAngleX)) > ANGLE_DEV) {
+			kalAngleX = 0.95 * pre_kalAngleX + 0.05 * kalAngleX;
+			//kalAngleX = Average(pre_kalAngleX, kalAngleX);
+			//pre_kalAngleX = kalAngleX;
+		}/* else {
+			pre_kalAngleX = kalAngleX;
+		}*/
+		if (count_P > 0) {
+			count_P--;
+		} else if (Abs(Abs(pre_kalAngleY) - Abs(kalAngleY)) > ANGLE_DEV) {
+			kalAngleY = 0.95 * pre_kalAngleY + 0.05 * kalAngleY;
+			//kalAngleY = Average(pre_kalAngleY, kalAngleY);
+			//pre_kalAngleY = kalAngleY;
+		} /*else {
+			UART1_puts("pre change\r\n\0");
+			pre_kalAngleY = kalAngleY;
+		}*/
 
+		taskENTER_CRITICAL();
+		K_Data.kalAngleX = kalAngleX;
+		K_Data.kalAngleY = kalAngleY;
+		//K_Data.kalAngleX = roll;
+		//K_Data.kalAngleY = pitch;
+		taskEXIT_CRITICAL();
+#ifdef kal
+		UART1_puts("\r\nRoll Pitch ");
+		shell_float2str(kalAngleX, uart_out);
+		UART1_puts(uart_out);
+		UART1_puts(" ");
+		shell_float2str(kalAngleY, uart_out);
+		UART1_puts(uart_out);
+#else
+		UART1_puts("\r\nRoll Pitch ");
+		shell_float2str(roll, uart_out);
+		UART1_puts(uart_out);
+		UART1_puts(" ");
+		shell_float2str(pitch, uart_out);
+		UART1_puts(uart_out);
+#endif
+		pre_kalAngleX = kalAngleX;
+		pre_kalAngleY = kalAngleY;
+		
 		vTaskDelayUntil(&xLastWakeTime, xFrequency);
 	}
 }
@@ -97,7 +147,7 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x01);
 
 	/* Gyroscope sample output rate = 8kH / (1+ 7) */
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_SMPLRT_DIV, 0x07);
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_SMPLRT_DIV, 0x00);
 	
 	/* Config accelerometer */
 	temp = I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_ACCEL_CONFIG);
@@ -226,7 +276,7 @@ uint8_t MPU6050_Task_Creat() {
 
 void Init_MPU6050() {
 	/* Initialize MPU6050 sensor 0, address = 0xD0, AD0 pin on sensor is low */
-	while (MPU6050_Init(TM_MPU6050_Accelerometer_4G, TM_MPU6050_Gyroscope_250s)
+	while (MPU6050_Init(TM_MPU6050_Accelerometer_8G, TM_MPU6050_Gyroscope_2000s)
 			!= TM_MPU6050_Result_Ok) {
 		/* Display message to user */
 		UART1_puts("\r\nRemote is NOT READY! PLEASE Checkout.");

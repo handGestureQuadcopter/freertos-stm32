@@ -87,12 +87,12 @@ void USART1_IRQHandler() {
 	UART1_ReadLine();
 }
 
-void UART1_ReadLine() {
+void UART1_ReadLine() 
+{
 	while (USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET);
 	char c = USART_ReceiveData(USART1);
 	if (c == '\r' || c == '\n') {
 		buffer[buffer_index] = '\0';
-		UART1_puts(buffer);
 		remote_ctrl(buffer);
 		buffer_index = 0;
 	} else {

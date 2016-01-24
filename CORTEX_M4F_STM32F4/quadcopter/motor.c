@@ -2,7 +2,7 @@
 #include "uart.h"
 #include "stm32f4xx_conf.h" 
 
-extern MotorSpeed_t motorspeed;
+MotorSpeed_t motorspeed;
 
 static uint16_t myatoi(char *str)
 {	
@@ -84,24 +84,32 @@ void Init_Motor()
 	PWM_TIM_Configuration();
 	PWM_GPIO_Configuration();
 
-	UART1_puts("Motor Init\r\n\0");
-	motorspeed.motor1_speed = 240;
-	motorspeed.motor2_speed = 240;
-	motorspeed.motor3_speed = 240;
-	motorspeed.motor4_speed = 240;
+	motorspeed.motor1_speed = MIN_PULSE;
+	motorspeed.motor2_speed = MIN_PULSE;
+	motorspeed.motor3_speed = MIN_PULSE;
+	motorspeed.motor4_speed = MIN_PULSE;
 	motorspeed.magicNumber1 = 0;
 	motorspeed.magicNumber2 = 0;
 	motorspeed.magicNumber3 = 0;
 	motorspeed.magicNumber4 = 0;
+
+	UART1_puts("Motor Init\r\n\0");
 }
 
 void Change_Speed()
 {
-	TIM4->CCR1 = MIN_MAX(motorspeed.motor1_speed + motorspeed.magicNumber1);
-	TIM4->CCR2 = MIN_MAX(motorspeed.motor2_speed + motorspeed.magicNumber2);
-	TIM4->CCR3 = MIN_MAX(motorspeed.motor3_speed + motorspeed.magicNumber3);
-	TIM4->CCR4 = MIN_MAX(motorspeed.motor4_speed + motorspeed.magicNumber4);
-	UART1_puts("channel 1 2 3 4 : \0");
+	taskENTER_CRITICAL();	
+	TIM4->CCR1 = MAX(MIN(motorspeed.motor1_speed + motorspeed.magicNumber1));
+	TIM4->CCR2 = MAX(MIN(motorspeed.motor2_speed + motorspeed.magicNumber2));
+	TIM4->CCR3 = MAX(MIN(motorspeed.motor3_speed + motorspeed.magicNumber3));
+	TIM4->CCR4 = MAX(MIN(motorspeed.motor4_speed + motorspeed.magicNumber4));
+	taskEXIT_CRITICAL();
+	UART1_puts("\r\nPID 1 2 3 4 : \0");
+	UART1_int(motorspeed.magicNumber1);UART1_puts(" ");
+	UART1_int(motorspeed.magicNumber2);UART1_puts(" ");
+	UART1_int(motorspeed.magicNumber3);UART1_puts(" ");
+	UART1_int(motorspeed.magicNumber4);
+	UART1_puts("\r\nchannel 1 2 3 4 : \0");
 	UART1_int(TIM4->CCR1);UART1_puts(" ");
 	UART1_int(TIM4->CCR2);UART1_puts(" ");
 	UART1_int(TIM4->CCR3);UART1_puts(" ");
@@ -113,24 +121,30 @@ void remote_ctrl(char *str)
 	uint16_t speed;
 	uint16_t channel;
 	speed = myatoi(str);
+	if(speed > 100 || speed < 0)
+		return;
+	UART1_int(speed);
 	channel = speed / 1000;
-	speed %= 1000;
-	if(channel < 5)
-		speed = PULSE(speed);
+	speed %= 1000;	
 	switch(channel){
 		case 1:
+			speed = PULSE(speed);
 			motorspeed.motor1_speed = speed;
 			break;
 		case 2:
+			speed = PULSE(speed);
 			motorspeed.motor2_speed = speed;
 			break;
 		case 3:
+			speed = PULSE(speed);
 			motorspeed.motor3_speed = speed;
 			break;
 		case 4:
+			speed = PULSE(speed);
 			motorspeed.motor4_speed = speed;
 			break;
 		case 5:
+			speed = PULSE(speed);
 			motorspeed.magicNumber1 = speed;
 			UART1_puts("channel 1 add \0");
 			UART1_int(speed);
@@ -155,10 +169,20 @@ void remote_ctrl(char *str)
 			UART1_puts("\r\n\0");
 			break;
 		default:
+			if(speed == 0)
+				Reset_MagicNumber();
+			speed = PULSE(speed);
 			motorspeed.motor1_speed = speed;
 			motorspeed.motor2_speed = speed;
 			motorspeed.motor3_speed = speed;
-			motorspeed.motor4_speed = speed;		
+			motorspeed.motor4_speed = speed;
 	}
 	Change_Speed();
+}
+void Reset_MagicNumber()
+{	
+	motorspeed.magicNumber1 = 0;
+	motorspeed.magicNumber2 = 0;
+	motorspeed.magicNumber3 = 0;
+	motorspeed.magicNumber4 = 0;
 }
