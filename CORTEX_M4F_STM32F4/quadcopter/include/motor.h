@@ -18,10 +18,10 @@ typedef struct Motor_Speed{
 	uint16_t motor2_speed;
 	uint16_t motor3_speed;
 	uint16_t motor4_speed;
-	uint16_t magicNumber1;
-	uint16_t magicNumber2;
-	uint16_t magicNumber3;
-	uint16_t magicNumber4;
+	int16_t magicNumber1;
+	int16_t magicNumber2;
+	int16_t magicNumber3;
+	int16_t magicNumber4;
 } MotorSpeed_t;
 
 void PWM_TIM_Configuration();
