@@ -121,6 +121,8 @@ void remote_ctrl(char *str)
 	uint16_t speed;
 	uint16_t channel;
 	speed = myatoi(str);
+	if(speed > 100 || speed < 0)
+		return;
 	UART1_int(speed);
 	channel = speed / 1000;
 	speed %= 1000;	

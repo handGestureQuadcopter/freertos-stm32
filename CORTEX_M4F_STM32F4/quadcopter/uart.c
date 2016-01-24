@@ -87,7 +87,8 @@ void USART1_IRQHandler() {
 	UART1_ReadLine();
 }
 
-void UART1_ReadLine() {
+void UART1_ReadLine() 
+{
 	while (USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET);
 	char c = USART_ReceiveData(USART1);
 	if (c == '\r' || c == '\n') {

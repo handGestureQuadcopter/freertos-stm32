@@ -11,7 +11,7 @@
 #define MIN_MAX(Speed) ((Speed < MIN_PULSE ? MIN_PULSE : Speed) > MAX_PULSE ? MIN_PULSE : Speed)
 #define PERIOD 4800
 #define PRESCALER 100
-#define MAGIC_CHECK(Value) ((Value < -30 ? -30 : Value) > 30 ? 30 : Value)
+#define MAGIC_CHECK(Value) ((Value < -10 ? -10 : Value) > 10 ? 10 : Value)
 
 typedef struct Motor_Speed{
 	uint16_t motor1_speed;

@@ -4,11 +4,11 @@
 #include "task.h"
 
 //PID define
-#define dt (100/portTICK_RATE_MS)
-#define KP 0.12f
+#define dt (40/portTICK_RATE_MS)
+#define KP 0.08f
 #define KI 0
-#define KD 50
-#define SETPOINT_X 3
+#define KD 0.1
+#define SETPOINT_X 0
 #define SETPOINT_Y 0
 #define PID_BOUND(Correction) ((Correction > 10 ? 10 : Correction) < -10 ? -10 : Correction )
 
