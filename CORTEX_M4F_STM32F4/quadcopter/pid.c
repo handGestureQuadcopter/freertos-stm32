@@ -86,21 +86,21 @@ void PID_X(float error, float integral, float derivative)
 {
 	float output;
 	output = (KP * error) + (KI * integral) + (KD * derivative);
-	output = PID_BOUND(output);
-	motorspeed.magicNumber1 = MAGIC_CHECK(motorspeed.magicNumber1 + output);
-	motorspeed.magicNumber2 = MAGIC_CHECK(motorspeed.magicNumber2 - output);
-	motorspeed.magicNumber3 = MAGIC_CHECK(motorspeed.magicNumber3 - output);
-	motorspeed.magicNumber4 = MAGIC_CHECK(motorspeed.magicNumber4 + output);
+	output = LOWWER_BOUND(UPPER_BOUND(output));
+	motorspeed.magicNumber1 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber1 + output));
+	motorspeed.magicNumber2 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber2 - output));
+	motorspeed.magicNumber3 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber3 - output));
+	motorspeed.magicNumber4 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber4 + output));
 }
 
 void PID_Y(float error, float integral, float derivative)
 {
 	float output;
 	output = (KP * error) + (KI * integral) + (KD * derivative);
-	output = PID_BOUND(output);
-	motorspeed.magicNumber1 = MAGIC_CHECK(motorspeed.magicNumber1 - output);
-	motorspeed.magicNumber2 = MAGIC_CHECK(motorspeed.magicNumber2 - output);
-	motorspeed.magicNumber3 = MAGIC_CHECK(motorspeed.magicNumber3 + output);
-	motorspeed.magicNumber4 = MAGIC_CHECK(motorspeed.magicNumber4 + output);
+	output = LOWWER_BOUND(UPPER_BOUND(output));
+	motorspeed.magicNumber1 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber1 - output));
+	motorspeed.magicNumber2 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber2 - output));
+	motorspeed.magicNumber3 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber3 + output));
+	motorspeed.magicNumber4 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber4 + output));
 
 }

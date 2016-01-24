@@ -8,10 +8,12 @@
 #define DEGREE 100
 #define PULSE_RANGE (MAX_PULSE - MIN_PULSE) 
 #define PULSE(Speed) (((Speed) * PULSE_RANGE / DEGREE)  + MIN_PULSE)
-#define MIN_MAX(Speed) ((Speed < MIN_PULSE ? MIN_PULSE : Speed) > MAX_PULSE ? MIN_PULSE : Speed)
+#define MIN(Speed) (Speed < MIN_PULSE ? MIN_PULSE : Speed)
+#define MAX(Speed) (Speed > MAX_PULSE ? MIN_PULSE : Speed)
 #define PERIOD 4800
 #define PRESCALER 100
-#define MAGIC_CHECK(Value) ((Value < -10 ? -10 : Value) > 10 ? 10 : Value)
+#define MAGIC_FLOOR(Value) (Value < -20 ? -20 : Value)
+#define MAGIC_CEILING(Value) (Value > 20 ? 20 : Value)
 
 typedef struct Motor_Speed{
 	uint16_t motor1_speed;

@@ -7,15 +7,15 @@
 #define Square(x) ((x)*(x))
 #define Abs(x) ((x < 0) ? (0-x) : x)
 #define Average(x, y) ((x + y) / 2) 
-#define ANGLE_DEV 40
+#define ANGLE_DEV 20
 #define kal
 
 static TM_MPU6050_t MPU6050_Data;
 
 TickType_t xLastWakeTime;
-TickType_t const xFrequency = 100 / portTICK_PERIOD_MS;
-//float const dt = 50 / portTICK_PERIOD_MS;
-float const dt = 0.3f;
+TickType_t const xFrequency = 25 / portTICK_PERIOD_MS;
+float const dt = 25 / portTICK_PERIOD_MS;
+//float const dt = 0.075f;
 
 Kalman kalmanX; // Create the Kalman instances
 Kalman kalmanY;

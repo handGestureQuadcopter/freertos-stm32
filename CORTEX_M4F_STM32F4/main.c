@@ -44,7 +44,7 @@ int main(void)
 	Init_UART1();
 	Init_Motor(PID_xHandle);
 	Init_MPU6050();
-	
+
 	if (!MPU6050_Task_Creat()) {
 		UART1_puts("Initialize information task failed!\r\n");
 	}
