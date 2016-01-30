@@ -104,7 +104,7 @@ void Change_Speed()
 	TIM4->CCR3 = MAX(MIN(motorspeed.motor3_speed + motorspeed.magicNumber3));
 	TIM4->CCR4 = MAX(MIN(motorspeed.motor4_speed + motorspeed.magicNumber4));
 	taskEXIT_CRITICAL();
-	UART1_puts("\r\nPID 1 2 3 4 : \0");
+	/*UART1_puts("\r\nPID 1 2 3 4 : \0");
 	UART1_int(motorspeed.magicNumber1);UART1_puts(" ");
 	UART1_int(motorspeed.magicNumber2);UART1_puts(" ");
 	UART1_int(motorspeed.magicNumber3);UART1_puts(" ");
@@ -113,7 +113,7 @@ void Change_Speed()
 	UART1_int(TIM4->CCR1);UART1_puts(" ");
 	UART1_int(TIM4->CCR2);UART1_puts(" ");
 	UART1_int(TIM4->CCR3);UART1_puts(" ");
-	UART1_int(TIM4->CCR4);
+	UART1_int(TIM4->CCR4);*/
 }
 
 void remote_ctrl(char *str)

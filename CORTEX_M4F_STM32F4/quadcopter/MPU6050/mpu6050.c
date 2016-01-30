@@ -7,14 +7,14 @@
 #define Square(x) ((x)*(x))
 #define Abs(x) ((x < 0) ? (0-x) : x)
 #define Average(x, y) ((x + y) / 2) 
-#define ANGLE_DEV 20
+//#define ANGLE_DEV 20
 #define kal
 
 static TM_MPU6050_t MPU6050_Data;
 
 TickType_t xLastWakeTime;
-TickType_t const xFrequency = 25 / portTICK_PERIOD_MS;
-float const dt = 25 / portTICK_PERIOD_MS;
+TickType_t const xFrequency = 100 / portTICK_PERIOD_MS;
+float const dt = 0.1f;
 //float const dt = 0.075f;
 
 Kalman kalmanX; // Create the Kalman instances
@@ -29,8 +29,8 @@ Kalman_Angel_Data K_Data;
 
 void MPU6050Task(void) {
 	char uart_out[32];
-	uint8_t count_R = 10;
-	uint8_t count_P = 10;
+//	uint8_t count_R = 10;
+//	uint8_t count_P = 10;
 
 	initKalman(&kalmanX);
 	initKalman(&kalmanY);
@@ -77,24 +77,19 @@ void MPU6050Task(void) {
 			gyroYrate = -gyroYrate; // Invert rate, so it fits the restriced accelerometer reading
 		kalAngleY = getAngle(&kalmanY, pitch, gyroYrate, dt);
 
-		if (count_R > 0) {
+		/*if (count_R > 0) {
 			count_R--;
 		} else if (Abs(Abs(pre_kalAngleX) - Abs(kalAngleX)) > ANGLE_DEV) {
 			kalAngleX = 0.95 * pre_kalAngleX + 0.05 * kalAngleX;
 			//kalAngleX = Average(pre_kalAngleX, kalAngleX);
 			//pre_kalAngleX = kalAngleX;
-		}/* else {
-			pre_kalAngleX = kalAngleX;
-		}*/
+		}
 		if (count_P > 0) {
 			count_P--;
 		} else if (Abs(Abs(pre_kalAngleY) - Abs(kalAngleY)) > ANGLE_DEV) {
 			kalAngleY = 0.95 * pre_kalAngleY + 0.05 * kalAngleY;
 			//kalAngleY = Average(pre_kalAngleY, kalAngleY);
 			//pre_kalAngleY = kalAngleY;
-		} /*else {
-			UART1_puts("pre change\r\n\0");
-			pre_kalAngleY = kalAngleY;
 		}*/
 
 		taskENTER_CRITICAL();
@@ -142,12 +137,20 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 		/* Return error */
 		return TM_MPU6050_Result_DeviceInvalid;
 	}
-	
-	/* Wakeup MPU6050, PLL with X axis gyroscope reference*/
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x01);
 
-	/* Gyroscope sample output rate = 8kH / (1+ 7) */
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_SMPLRT_DIV, 0x00);
+	/* Reset MPU6050 and wait for a while.*/
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x80);
+	for (int i = 0; i < 500000; i++)
+		for (int i = 0; i < 500000; i++);
+
+	/* Enable low-pass filter */
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_CONFIG, 0x01);
+
+	/* Wakeup MPU6050, PLL with Z axis gyroscope reference*/
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x03);
+
+	/* Gyroscope sample output rate = 8kH / (1+ 1) */
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_SMPLRT_DIV, 0x01);
 	
 	/* Config accelerometer */
 	temp = I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_ACCEL_CONFIG);
