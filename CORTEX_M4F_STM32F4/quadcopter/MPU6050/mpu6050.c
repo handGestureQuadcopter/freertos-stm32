@@ -141,7 +141,7 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 	/* Reset MPU6050 and wait for a while.*/
 	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x80);
 	for (int i = 0; i < 500000; i++)
-		for (int i = 0; i < 500000; i++);
+		for (int j = 0; j < 500000; j++);
 
 	/* Enable low-pass filter */
 	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_CONFIG, 0x01);
