@@ -149,7 +149,7 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 	/* Wakeup MPU6050, PLL with Z axis gyroscope reference*/
 	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x03);
 
-	/* Gyroscope sample output rate = 8kH / (1+ 1) */
+	/* Gyroscope sample output rate = 1kH / (1+ 1) */
 	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_SMPLRT_DIV, 0x01);
 	
 	/* Config accelerometer */
