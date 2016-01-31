@@ -31,4 +31,4 @@ void PWM_GPIO_Configuration();
 void PWM_RCC_Configuration();
 void Init_Motor();
 void Change_Speed();
-void remote_ctrl(char *str);
+void Reset_MagicNumber();

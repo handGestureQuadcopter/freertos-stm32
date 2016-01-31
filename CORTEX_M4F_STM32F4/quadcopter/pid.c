@@ -4,13 +4,48 @@
 extern MotorSpeed_t motorspeed;
 extern Kalman_Angel_Data K_Data;
 
-float roll, pitch;
+float KP = 0.05f;
+float KI = 0;
+float KD = 1.5f;
+float SETPOINT_X = 0;
+float SETPOINT_Y = 0;
 
-uint8_t PID_Task_Creat(TaskHandle_t xHandle) {
-	BaseType_t ret = xTaskCreate(PIDTask,"PID",512,(void *) NULL,tskIDLE_PRIORITY + 4, &xHandle);
+uint8_t PID_Task_Creat() {
+	BaseType_t ret = xTaskCreate(PIDTask,"PID",512,(void *) NULL,tskIDLE_PRIORITY + 4, NULL);
 	if (ret != pdPASS)  
 		return 0;
 	return 1;   
+}
+
+float getKP(){return KP;}
+float getKI(){return KI;}
+float getKD(){return KD;}
+float getSetPointX(){return SETPOINT_X;}
+float getSetPOintY(){return SETPOINT_Y;}
+
+void setKP(float setting)
+{
+	KP = setting;
+}
+
+void setKI(float setting)
+{
+	KI = setting;
+}
+
+void setKD(float setting)
+{
+	KD = setting;
+}
+
+void setSetPointX(float setting)
+{
+	SETPOINT_X = setting;
+}
+
+void setSetPointY(float setting)
+{
+	SETPOINT_Y = setting;
 }
 
 void PIDTask()
@@ -19,6 +54,7 @@ void PIDTask()
 	int16_t integral_X, integral_Y;
 	int16_t error_X, error_Y;
 	int16_t derivative_X, derivative_Y;
+	float roll, pitch;
 
 	//Intialize	
 	pre_error_X = 0;

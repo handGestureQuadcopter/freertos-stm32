@@ -3,6 +3,7 @@
 
 char buffer[MAX_UART_INPUT];
 uint8_t buffer_index = 0;
+extern MotorSpeed_t motorspeed;
 
 void UART1_RCC_Configuration()
 {
@@ -34,7 +35,7 @@ void UART1_Configuration()
 {
 	USART_InitTypeDef USART_InitStructure;
 
-	USART_InitStructure.USART_BaudRate = 115200;
+	USART_InitStructure.USART_BaudRate = 57600;
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;
 	USART_InitStructure.USART_Parity = USART_Parity_No;
@@ -94,10 +95,82 @@ void UART1_ReadLine()
 	if (c == '\r' || c == '\n') {
 		buffer[buffer_index] = '\0';
 		remote_ctrl(buffer);
+		UART1_puts(buffer);
 		buffer_index = 0;
 	} else {
 		buffer[buffer_index++] = c;
 	}
 	if (buffer_index == 50)
 		buffer_index = 0;
+}
+uint16_t myatoi(char *str)
+{	
+	uint16_t num = 0;
+	while (*str != '\0') {
+		num *= 10; 
+		num += (*str - '0');
+		str++;
+	}
+	return num;
+}
+void remote_ctrl(char *str)
+{
+	uint16_t command;
+	uint16_t protocol;
+	char temp[10];
+	command = myatoi(str);
+	protocol = command / 1000;
+	command %= 1000;	
+	switch(protocol){
+		case 1:
+			command = PULSE(command);
+			if(command == 0)
+				Reset_MagicNumber();
+			motorspeed.motor1_speed = command;
+			motorspeed.motor2_speed = command;
+			motorspeed.motor3_speed = command;
+			motorspeed.motor4_speed = command;
+			Change_Speed();
+			break;
+		case 2:
+		/*	UART1_puts("KP");
+			shell_float2str(getKP(),temp);
+			UART1_puts(temp);
+			UART1_puts("\r\nKI");
+			shell_float2str(getKI(),temp);
+			UART1_puts(temp);	
+			UART1_puts("\r\nKD");
+			shell_float2str(getKD(),temp);
+			UART1_puts(temp);*/
+			break;
+		case 3:
+			break;
+		case 4:
+			break;
+		/*case 5:
+			speed = PULSE(speed);
+			motorspeed.magicNumber1 = speed;
+			UART1_puts("channel 1 add \0");
+			UART1_int(speed);
+			UART1_puts("\r\n\0");
+			break;
+		case 6:
+			motorspeed.magicNumber2 = speed;
+			UART1_puts("channel 2 add \0");
+			UART1_int(speed);
+			UART1_puts("\r\n\0");
+			break;
+		case 7:
+			motorspeed.magicNumber3 = speed;
+			UART1_puts("channel 3 add \0");
+			UART1_int(speed);
+			UART1_puts("\r\n\0");
+			break;
+		case 8:
+			motorspeed.magicNumber4 = speed;
+			UART1_puts("channel 4 add \0");
+			UART1_int(speed);
+			UART1_puts("\r\n\0");
+			break;*/
+	}
 }

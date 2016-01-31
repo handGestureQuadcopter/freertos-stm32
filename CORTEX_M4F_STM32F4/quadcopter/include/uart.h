@@ -1,6 +1,7 @@
 #include "stm32f4xx_conf.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "shell.h"
 
 #define MAX_UART_INPUT 50
 
@@ -11,3 +12,4 @@ void Init_UART1();
 void UART1_puts(char* s);
 void UART1_int(uint16_t num);
 void UART1_ReadLine();
+void remote_ctrl(char *str);

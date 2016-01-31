@@ -4,17 +4,6 @@
 
 MotorSpeed_t motorspeed;
 
-static uint16_t myatoi(char *str)
-{	
-	uint16_t num = 0;
-	while (*str != '\0') {
-		num *= 10; 
-		num += (*str - '0');
-		str++;
-	}
-	return num;
-}
-
 void PWM_RCC_Configuration()
 {
 	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD , ENABLE );
@@ -104,7 +93,7 @@ void Change_Speed()
 	TIM4->CCR3 = MAX(MIN(motorspeed.motor3_speed + motorspeed.magicNumber3));
 	TIM4->CCR4 = MAX(MIN(motorspeed.motor4_speed + motorspeed.magicNumber4));
 	taskEXIT_CRITICAL();
-	/*UART1_puts("\r\nPID 1 2 3 4 : \0");
+/*	UART1_puts("\r\nPID 1 2 3 4 : \0");
 	UART1_int(motorspeed.magicNumber1);UART1_puts(" ");
 	UART1_int(motorspeed.magicNumber2);UART1_puts(" ");
 	UART1_int(motorspeed.magicNumber3);UART1_puts(" ");
@@ -116,69 +105,6 @@ void Change_Speed()
 	UART1_int(TIM4->CCR4);*/
 }
 
-void remote_ctrl(char *str)
-{
-	uint16_t speed;
-	uint16_t channel;
-	speed = myatoi(str);
-	if(speed > 100 || speed < 0)
-		return;
-	UART1_int(speed);
-	channel = speed / 1000;
-	speed %= 1000;	
-	switch(channel){
-		case 1:
-			speed = PULSE(speed);
-			motorspeed.motor1_speed = speed;
-			break;
-		case 2:
-			speed = PULSE(speed);
-			motorspeed.motor2_speed = speed;
-			break;
-		case 3:
-			speed = PULSE(speed);
-			motorspeed.motor3_speed = speed;
-			break;
-		case 4:
-			speed = PULSE(speed);
-			motorspeed.motor4_speed = speed;
-			break;
-		case 5:
-			speed = PULSE(speed);
-			motorspeed.magicNumber1 = speed;
-			UART1_puts("channel 1 add \0");
-			UART1_int(speed);
-			UART1_puts("\r\n\0");
-			break;
-		case 6:
-			motorspeed.magicNumber2 = speed;
-			UART1_puts("channel 2 add \0");
-			UART1_int(speed);
-			UART1_puts("\r\n\0");
-			break;
-		case 7:
-			motorspeed.magicNumber3 = speed;
-			UART1_puts("channel 3 add \0");
-			UART1_int(speed);
-			UART1_puts("\r\n\0");
-			break;
-		case 8:
-			motorspeed.magicNumber4 = speed;
-			UART1_puts("channel 4 add \0");
-			UART1_int(speed);
-			UART1_puts("\r\n\0");
-			break;
-		default:
-			if(speed == 0)
-				Reset_MagicNumber();
-			speed = PULSE(speed);
-			motorspeed.motor1_speed = speed;
-			motorspeed.motor2_speed = speed;
-			motorspeed.motor3_speed = speed;
-			motorspeed.motor4_speed = speed;
-	}
-	Change_Speed();
-}
 void Reset_MagicNumber()
 {	
 	motorspeed.magicNumber1 = 0;
