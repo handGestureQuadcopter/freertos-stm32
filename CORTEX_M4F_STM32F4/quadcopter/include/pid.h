@@ -5,8 +5,8 @@
 
 //PID define
 #define dt (20/portTICK_RATE_MS)
-#define UPPER_BOUND(Correction) (Correction > 15 ? 15 : Correction)
-#define LOWWER_BOUND(Correction) (Correction < -15 ? -15 : Correction)
+#define UPPER_BOUND(Correction) (Correction > 20 ? 20 : Correction)
+#define LOWWER_BOUND(Correction) (Correction < 0 ? 0 : Correction)
 
 void PIDTask();
 uint8_t PID_Task_Creat();

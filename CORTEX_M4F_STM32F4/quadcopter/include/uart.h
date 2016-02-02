@@ -1,7 +1,6 @@
 #include "stm32f4xx_conf.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "shell.h"
 
 #define MAX_UART_INPUT 50
 

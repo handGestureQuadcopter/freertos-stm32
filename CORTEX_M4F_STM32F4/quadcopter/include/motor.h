@@ -14,6 +14,7 @@
 #define PRESCALER 100
 #define MAGIC_FLOOR(Value) (Value < -20 ? -20 : Value)
 #define MAGIC_CEILING(Value) (Value > 20 ? 20 : Value)
+#define SPEEDUP 15
 
 typedef struct Motor_Speed{
 	uint16_t motor1_speed;

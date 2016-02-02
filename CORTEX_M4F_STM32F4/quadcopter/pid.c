@@ -4,9 +4,9 @@
 extern MotorSpeed_t motorspeed;
 extern Kalman_Angel_Data K_Data;
 
-float KP = 0.05f;
+float KP = 0.1f;
 float KI = 0;
-float KD = 1.5f;
+float KD = 2.0f;
 float SETPOINT_X = 0;
 float SETPOINT_Y = 0;
 
