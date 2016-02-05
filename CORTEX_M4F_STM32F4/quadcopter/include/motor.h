@@ -3,7 +3,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#define MAX_PULSE 400
+#define MAX_PULSE 480
 #define MIN_PULSE 240
 #define DEGREE 100
 #define PULSE_RANGE (MAX_PULSE - MIN_PULSE) 
@@ -12,7 +12,7 @@
 #define MAX(Speed) (Speed > MAX_PULSE ? MIN_PULSE : Speed)
 #define PERIOD 4800
 #define PRESCALER 100
-#define MAGIC_FLOOR(Value) (Value < -20 ? -20 : Value)
+#define MAGIC_FLOOR(Value) (Value < 0 ? 0 : Value)
 #define MAGIC_CEILING(Value) (Value > 20 ? 20 : Value)
 #define SPEEDUP 15
 
@@ -25,6 +25,10 @@ typedef struct Motor_Speed{
 	int16_t magicNumber2;
 	int16_t magicNumber3;
 	int16_t magicNumber4;
+	int16_t d_speedup1;
+	int16_t d_speedup2;
+	int16_t d_speedup3;
+	int16_t d_speedup4;
 } MotorSpeed_t;
 
 void PWM_TIM_Configuration();

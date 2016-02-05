@@ -5,6 +5,7 @@
 char buffer[MAX_UART_INPUT];
 uint8_t buffer_index = 0;
 extern MotorSpeed_t motorspeed;
+extern Kalman_Angel_Data K_Data;
 
 void UART1_RCC_Configuration()
 {
@@ -125,13 +126,13 @@ void remote_ctrl(char *str)
 	protocol = command / 1000;
 	command %= 1000;	
 	switch(protocol){
-		case 0:		//reset
-			
+		case 0:		//reset	
 			break;
 		case 1:
 			command = PULSE(command);
-			if(command == 0)
+			if(command == MIN_PULSE){
 				Reset_MagicNumber();
+			}
 			motorspeed.motor1_speed = command;
 			motorspeed.motor2_speed = command;
 			motorspeed.motor3_speed = command;
@@ -167,18 +168,39 @@ void remote_ctrl(char *str)
 			}
 			break;
 		case 3:
+			if(command == 0){
+				UART1_puts("\r\nSetpointX : ");
+				shell_float2str(getSetPointX(),temp);
+				UART1_puts(temp);
+				UART1_puts("\r\nSetpointY : ");
+				shell_float2str(getSetPointY(),temp);	
+				UART1_puts(temp);
+			}			
+			else{
+				UART1_puts("\r\nSetpointX : ");
+				shell_float2str(setSetPointX(K_Data.kalAngleX),temp);
+				UART1_puts(temp);
+				UART1_puts("\r\nSetpointY : ");
+				shell_float2str(setSetPointY(K_Data.kalAngleY),temp);	
+				UART1_puts(temp);	
+			}	
 			break;
 		case 4:
+			UART1_puts("\r\nPID 1 2 3 4 : \0");
+			UART1_int(motorspeed.magicNumber1);UART1_puts(" ");
+			UART1_int(motorspeed.magicNumber2);UART1_puts(" ");
+			UART1_int(motorspeed.magicNumber3);UART1_puts(" ");
+			UART1_int(motorspeed.magicNumber4);
 			break;
 		case 5:		//forward
 			if(command == 100){
-				motorspeed.magicNumber1 += SPEEDUP;
-				motorspeed.magicNumber2 += SPEEDUP;
+				motorspeed.d_speedup1 += SPEEDUP;
+				motorspeed.d_speedup2 += SPEEDUP;
 				//setSetPointY(-20.0);
 				UART1_puts("Forward\r\n\0");
 			}else{
-				motorspeed.magicNumber1 -= SPEEDUP;
-				motorspeed.magicNumber2 -= SPEEDUP;
+				motorspeed.d_speedup1 -= SPEEDUP;
+				motorspeed.d_speedup2 -= SPEEDUP;
 				//setSetPointY(-20.0);
 				UART1_puts("Hover\r\n\0");
 			}
@@ -186,13 +208,13 @@ void remote_ctrl(char *str)
 			break;
 		case 6:		//left
 			if(command == 100){
-				motorspeed.magicNumber2 += SPEEDUP;
-				motorspeed.magicNumber3 += SPEEDUP;
+				motorspeed.d_speedup2 += SPEEDUP;
+				motorspeed.d_speedup3 += SPEEDUP;
 				//setSetPointX(-20.0);
 				UART1_puts("Left\r\n\0");
 			}else{
-				motorspeed.magicNumber2 -= SPEEDUP;
-				motorspeed.magicNumber3 -= SPEEDUP;
+				motorspeed.d_speedup2 -= SPEEDUP;
+				motorspeed.d_speedup3 -= SPEEDUP;
 				//setSetPointX(-20.0);
 				UART1_puts("Hover\r\n\0");
 			}
@@ -200,13 +222,13 @@ void remote_ctrl(char *str)
 			break;
 		case 7:		//backward
 			if(command == 100){
-				motorspeed.magicNumber3 += SPEEDUP;
-				motorspeed.magicNumber4 += SPEEDUP;
+				motorspeed.d_speedup3 += SPEEDUP;
+				motorspeed.d_speedup4 += SPEEDUP;
 				//setSetPointY(20.0);
 				UART1_puts("Backward\r\n\0");
 			}else{
-				motorspeed.magicNumber3 -= SPEEDUP;
-				motorspeed.magicNumber4 -= SPEEDUP;
+				motorspeed.d_speedup3 -= SPEEDUP;
+				motorspeed.d_speedup4 -= SPEEDUP;
 				//setSetPointX(-20.0);
 				UART1_puts("Hover\r\n\0");
 			}
@@ -214,13 +236,13 @@ void remote_ctrl(char *str)
 			break;
 		case 8:		//right
 			if(command == 100){
-				motorspeed.magicNumber4 += SPEEDUP;
-				motorspeed.magicNumber1 += SPEEDUP;
+				motorspeed.d_speedup4 += SPEEDUP;
+				motorspeed.d_speedup1 += SPEEDUP;
 				//setSetPointX(20.0);
 				UART1_puts("Right\r\n\0");
 			}else{
-				motorspeed.magicNumber4 -= SPEEDUP;
-				motorspeed.magicNumber1 -= SPEEDUP;
+				motorspeed.d_speedup4 -= SPEEDUP;
+				motorspeed.d_speedup1 -= SPEEDUP;
 				//setSetPointX(-20.0);
 				UART1_puts("Hover\r\n\0");
 			}

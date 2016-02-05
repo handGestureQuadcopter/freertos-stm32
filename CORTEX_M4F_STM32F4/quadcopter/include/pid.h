@@ -25,5 +25,5 @@ void setKI(float setting);
 void setKD(float setting);
 float getSetPointX();
 float getSetPointY();
-void setSetPointX(float setting);
-void setSetPointY(float setting);
+float setSetPointX(float setting);
+float setSetPointY(float setting);

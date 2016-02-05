@@ -81,6 +81,10 @@ void Init_Motor()
 	motorspeed.magicNumber2 = 0;
 	motorspeed.magicNumber3 = 0;
 	motorspeed.magicNumber4 = 0;
+	motorspeed.d_speedup1 = 0;
+	motorspeed.d_speedup2 = 0;
+	motorspeed.d_speedup3 = 0;
+	motorspeed.d_speedup4 = 0;	
 
 	UART1_puts("Motor Init\r\n\0");
 }
@@ -88,12 +92,12 @@ void Init_Motor()
 void Change_Speed()
 {
 	taskENTER_CRITICAL();	
-	TIM4->CCR1 = MAX(MIN(motorspeed.motor1_speed + motorspeed.magicNumber1));
-	TIM4->CCR2 = MAX(MIN(motorspeed.motor2_speed + motorspeed.magicNumber2));
-	TIM4->CCR3 = MAX(MIN(motorspeed.motor3_speed + motorspeed.magicNumber3));
-	TIM4->CCR4 = MAX(MIN(motorspeed.motor4_speed + motorspeed.magicNumber4));
+	TIM4->CCR1 = MAX(MIN(motorspeed.motor1_speed + motorspeed.magicNumber1 + motorspeed.d_speedup1));
+	TIM4->CCR2 = MAX(MIN(motorspeed.motor2_speed + motorspeed.magicNumber2 + motorspeed.d_speedup2));
+	TIM4->CCR3 = MAX(MIN(motorspeed.motor3_speed + motorspeed.magicNumber3 + motorspeed.d_speedup3));
+	TIM4->CCR4 = MAX(MIN(motorspeed.motor4_speed + motorspeed.magicNumber4 + motorspeed.d_speedup4));
 	taskEXIT_CRITICAL();
-/*	UART1_puts("\r\nPID 1 2 3 4 : \0");
+	/*UART1_puts("\r\nPID 1 2 3 4 : \0");
 	UART1_int(motorspeed.magicNumber1);UART1_puts(" ");
 	UART1_int(motorspeed.magicNumber2);UART1_puts(" ");
 	UART1_int(motorspeed.magicNumber3);UART1_puts(" ");
@@ -106,9 +110,11 @@ void Change_Speed()
 }
 
 void Reset_MagicNumber()
-{	
+{
+	taskENTER_CRITICAL();
 	motorspeed.magicNumber1 = 0;
 	motorspeed.magicNumber2 = 0;
 	motorspeed.magicNumber3 = 0;
 	motorspeed.magicNumber4 = 0;
+	taskEXIT_CRITICAL();
 }

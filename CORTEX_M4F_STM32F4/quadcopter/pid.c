@@ -6,7 +6,7 @@ extern Kalman_Angel_Data K_Data;
 
 float KP = 0.1f;
 float KI = 0;
-float KD = 2.0f;
+float KD = 0.0f;
 float SETPOINT_X = 0;
 float SETPOINT_Y = 0;
 
@@ -21,7 +21,7 @@ float getKP(){return KP;}
 float getKI(){return KI;}
 float getKD(){return KD;}
 float getSetPointX(){return SETPOINT_X;}
-float getSetPOintY(){return SETPOINT_Y;}
+float getSetPointY(){return SETPOINT_Y;}
 
 void setKP(float setting)
 {
@@ -38,14 +38,16 @@ void setKD(float setting)
 	KD = setting;
 }
 
-void setSetPointX(float setting)
+float setSetPointX(float setting)
 {
 	SETPOINT_X = setting;
+	return setting;
 }
 
-void setSetPointY(float setting)
+float setSetPointY(float setting)
 {
 	SETPOINT_Y = setting;
+	return setting;
 }
 
 void PIDTask()
@@ -128,7 +130,6 @@ void PID_X(float error, float integral, float derivative)
 	motorspeed.magicNumber3 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber3 - output));
 	motorspeed.magicNumber4 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber4 + output));
 }
-
 void PID_Y(float error, float integral, float derivative)
 {
 	float output;
