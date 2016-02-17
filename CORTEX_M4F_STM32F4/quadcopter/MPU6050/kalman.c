@@ -37,6 +37,10 @@ float getAngle(Kalman *K, float newAngle, float newRate, float dt) {
 	K->P[1][0] -= dt * K->P[1][1];
 	K->P[1][1] += K->Q_bias * dt;
 
+	// Calculate angle and bias - Update estimate with measurement zk (newAngle)
+	/* Step 3 */
+	K->y = newAngle - K->angle;
+
 	// Discrete Kalman filter measurement update equations - Measurement Update ("Correct")
 	// Calculate Kalman gain - Compute the Kalman gain
 	/* Step 4 */
@@ -45,9 +49,6 @@ float getAngle(Kalman *K, float newAngle, float newRate, float dt) {
 	K->gain[0] = K->P[0][0] / K->S;
 	K->gain[1] = K->P[1][0] / K->S;
 
-	// Calculate angle and bias - Update estimate with measurement zk (newAngle)
-	/* Step 3 */
-	K->y = newAngle - K->angle;
 	/* Step 6 */
 	K->angle += K->gain[0] * K->y;
 	K->bias += K->gain[1] * K->y;

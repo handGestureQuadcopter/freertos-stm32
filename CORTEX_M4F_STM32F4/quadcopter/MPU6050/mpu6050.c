@@ -4,17 +4,15 @@
 #include "shell.h"
 #include "uart.h"
 
+#define SENSOR_PERIOD_MS 50
+
 #define Square(x) ((x)*(x))
 #define Abs(x) ((x < 0) ? (0-x) : x)
-#define Average(x, y) ((x + y) / 2) 
-//#define ANGLE_DEV 20
-#define kal
+#define Average(x, y) ((x + y) / 2)
 
+xTaskHandle xSensorHandle;
 static TM_MPU6050_t MPU6050_Data;
-
-TickType_t xLastWakeTime;
-TickType_t const xFrequency = 100 / portTICK_PERIOD_MS;
-float const dt = 0.1f;
+float const dt = SENSOR_PERIOD_MS / 1000.0;
 
 Kalman kalmanX; // Create the Kalman instances
 Kalman kalmanY;
@@ -23,7 +21,6 @@ Kalman kalmanY;
 float accX, accY, accZ;
 float gyroX, gyroY;
 float kalAngleX, kalAngleY;
-float pre_kalAngleX, pre_kalAngleY;
 Kalman_Angel_Data K_Data;
 
 void MPU6050Task(void) {
@@ -42,10 +39,8 @@ void MPU6050Task(void) {
 
 	setAngle(&kalmanX, roll); // Set starting angle
 	setAngle(&kalmanY, pitch);
-	pre_kalAngleX = 0;
-	pre_kalAngleY = 0;
-	kalAngleX = 0;
-	kalAngleY = 0;
+
+	Enable_TIM2_INTERRUPT();
 	while (1) {
 
 		/* Read all data from sensor */
@@ -66,6 +61,7 @@ void MPU6050Task(void) {
 		// This fixes the transition problem when the accelerometer angle jumps between -180 and 180 degrees
 		if ((roll < -90 && kalAngleX > 90) || (roll > 90 && kalAngleX < -90)) {
 			setAngle(&kalmanX, roll);
+			kalAngleX = roll;
 		} else {
 			kalAngleX = getAngle(&kalmanX, roll, gyroXrate, dt); // Calculate the angle using a Kalman filter
 		}
@@ -78,25 +74,15 @@ void MPU6050Task(void) {
 		K_Data.kalAngleX = kalAngleX;
 		K_Data.kalAngleY = kalAngleY;
 		taskEXIT_CRITICAL();
-/*#ifdef kal
-		UART1_puts("\r\nRoll Pitch ");
-		shell_float2str(kalAngleX, uart_out);
-		UART1_puts(uart_out);
-		UART1_puts(" ");
-		shell_float2str(kalAngleY, uart_out);
-		UART1_puts(uart_out);
-#else
-		UART1_puts("\r\nRoll Pitch ");
-		shell_float2str(roll, uart_out);
-		UART1_puts(uart_out);
-		UART1_puts(" ");
-		shell_float2str(pitch, uart_out);
-		UART1_puts(uart_out);
-#endif*/
-		pre_kalAngleX = kalAngleX;
-		pre_kalAngleY = kalAngleY;
+
+//		UART1_puts("\r\n");
+//		shell_float2str(kalAngleX, uart_out);
+//		UART1_puts(uart_out);
+//		UART1_puts(" ");
+//		shell_float2str(kalAngleY, uart_out);
+//		UART1_puts(uart_out);
 		
-		vTaskDelayUntil(&xLastWakeTime, xFrequency);
+		vTaskSuspend(xSensorHandle);
 	}
 }
 
@@ -118,23 +104,15 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 		return TM_MPU6050_Result_DeviceInvalid;
 	}
 
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x01);
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_SMPLRT_DIV, 0x00);
-/*
-	// Reset MPU6050 and wait for a while.
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x80);
-	for (int i = 0; i < 500000; i++)
-		for (int j = 0; j < 500000; j++);
+	// Wakeup MPU6050, PLL with Z axis gyroscope reference
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x03);
 
 	// Enable low-pass filter 
 	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_CONFIG, 0x01);
 
-	// Wakeup MPU6050, PLL with Z axis gyroscope reference
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x03);
-
 	// Gyroscope sample output rate = 1kH / (1+ 1) 
 	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_SMPLRT_DIV, 0x01);
-*/	
+
 	/* Config accelerometer */
 	temp = I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_ACCEL_CONFIG);
 	temp = (temp & 0xE7) | (uint8_t)AccelerometerSensitivity << 3;
@@ -254,7 +232,7 @@ uint8_t MPU6050_Task_Creat() {
 			512,
 			(void * ) NULL,
 			tskIDLE_PRIORITY + 4,
-			(void *) NULL);
+			&xSensorHandle);
 	if (ret != pdPASS)
 		return 0;
 	return 1;
@@ -262,10 +240,40 @@ uint8_t MPU6050_Task_Creat() {
 
 void Init_MPU6050() {
 	/* Initialize MPU6050 sensor 0, address = 0xD0, AD0 pin on sensor is low */
-	while (MPU6050_Init(TM_MPU6050_Accelerometer_8G, TM_MPU6050_Gyroscope_2000s)
+	while (MPU6050_Init(TM_MPU6050_Accelerometer_4G, TM_MPU6050_Gyroscope_500s)
 			!= TM_MPU6050_Result_Ok) {
 		/* Display message to user */
 		UART1_puts("\r\nRemote is NOT READY! PLEASE Checkout.");
 	}
 	UART1_puts("\r\nRemote is ready to use!");
+}
+
+void Enable_TIM2_INTERRUPT() {
+	NVIC_InitTypeDef NVIC_InitStructure;
+	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+
+	NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+
+	TIM_TimeBaseStructure.TIM_Period = SENSOR_PERIOD_MS - 1;
+	TIM_TimeBaseStructure.TIM_Prescaler = 168000 - 1;
+	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+	TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
+	TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
+
+	TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
+	TIM_Cmd(TIM2, ENABLE);
+}
+
+void TIM2_IRQHandler(void) {
+	if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
+		TIM_ClearITPendingBit(TIM2, /*TIM_IT_Update*/TIM_FLAG_Update);
+		vTaskResume(xSensorHandle);
+	}
 }

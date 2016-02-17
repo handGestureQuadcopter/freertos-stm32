@@ -10,8 +10,10 @@ extern C {
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "misc.h"
 #include "stm32f4xx_rcc.h"
 #include "stm32f4xx_gpio.h"
+#include "stm32f4xx_tim.h"
 
 typedef struct {
 	float kalAngleX;
@@ -203,6 +205,8 @@ uint8_t MPU6050_I2C_IsDeviceConnected(uint8_t address);
 uint8_t MPU6050_Task_Creat();
 
 void Init_MPU6050();
+
+void Enable_TIM2_INTERRUPT();
  
 /**
  * @}
