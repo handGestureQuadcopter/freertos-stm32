@@ -4,7 +4,7 @@
 extern MotorSpeed_t motorspeed;
 extern Kalman_Angel_Data K_Data;
 
-float KP = 0.1f;
+float KP = 0.2f;
 float KI = 0;
 float KD = 0.0f;
 float SETPOINT_X = 0;
@@ -82,15 +82,16 @@ void PIDTask()
 		derivative_X = calculateD(error_X, pre_error_X);
 		PID_X(error_X,integral_X,derivative_X);
 		pre_error_X = error_X;
+		Change_Speed();
 
 		//y axis for pitch
 		error_Y = calculateP_Y(pitch);
 		integral_Y = calculateI(integral_Y, error_Y);
 		derivative_Y = calculateD(error_Y, pre_error_Y);
 		PID_Y(error_Y,integral_Y,derivative_Y);
-		pre_error_Y = error_Y;
-	
+		pre_error_Y = error_Y;	
 		Change_Speed();
+
 		vTaskDelay(dt);
 	}
 }
