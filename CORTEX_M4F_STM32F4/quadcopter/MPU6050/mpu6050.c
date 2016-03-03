@@ -8,23 +8,52 @@
 
 #define Square(x) ((x)*(x))
 #define Abs(x) ((x < 0) ? (0-x) : x)
-#define Average(x, y) ((x + y) / 2)
+//#define Average(x, y) ((x + y) / 2)
 
 xTaskHandle xSensorHandle;
 static TM_MPU6050_t MPU6050_Data;
 float const dt = SENSOR_PERIOD_MS / 1000.0;
 
-Kalman kalmanX; // Create the Kalman instances
-Kalman kalmanY;
-
-/* IMU Data */
-float accX, accY, accZ;
-float gyroX, gyroY;
-float kalAngleX, kalAngleY;
 Kalman_Angel_Data K_Data;
 
 void MPU6050Task(void) {
 	char uart_out[32];
+
+	Kalman kalmanX; // Create the Kalman instances
+	Kalman kalmanY;
+
+	/* IMU Data */
+	float accX, accY, accZ;
+	float gyroX, gyroY, gyroZ;
+	float kalAngleX, kalAngleY;
+
+	/* Offset Data. Example of data for current board
+
+		Raw_Axis |  min   | max  |  average(offset) | 1g_scale	|>
+
+		    X	   -4013	4222	104					4117
+		    Y	   -4097	4052    -22 				4074
+		    Z	   -4378  	3952	-213				4165
+
+		But actual raw_data for 1g in 8g_full_scale setting should be 4096
+		So that the modify factor for acc_scale will be 4096/(measured1g_scale) (i.e. scale it to 4096)
+	*/
+	float offset_accX = 104.0f, offset_accY = -22.0f, offset_accZ = -213.0f;
+	float scale_accX = 4096.0f / 4117.0f;
+	float scale_accY = 4096.0f / 4074.0f;
+	float scale_accZ = 4096.0f / 4165.0f;
+
+	/* Gyro offset */
+	float offset_gyroX = 0.0f, offset_gyroY = 0.0f, offset_gyroZ = 0.0f;
+	for (int i = 0; i < 1000; i++) {
+
+		MPU6050_ReadGyroscope();
+		offset_gyroX +=	((float) MPU6050_Data.Gyroscope_X) / 1000.0;
+		offset_gyroY +=	((float) MPU6050_Data.Gyroscope_Y) / 1000.0;
+		offset_gyroZ +=	((float) MPU6050_Data.Gyroscope_Z) / 1000.0;
+
+		delay(100);
+	}
 
 	initKalman(&kalmanX);
 	initKalman(&kalmanY);
@@ -35,7 +64,7 @@ void MPU6050Task(void) {
 	accZ = MPU6050_Data.Accelerometer_Z;
 
 	float roll = atan2(-accY, accZ) * RAD_TO_DEG;
-	float pitch = atan(-accX / sqrt1(Square(accY) + Square(accZ))) * RAD_TO_DEG;
+	float pitch = atan(-accX / sqrtf(Square(accY) + Square(accZ))) * RAD_TO_DEG;
 
 	setAngle(&kalmanX, roll); // Set starting angle
 	setAngle(&kalmanY, pitch);
@@ -51,12 +80,21 @@ void MPU6050Task(void) {
 		accZ = MPU6050_Data.Accelerometer_Z;
 		gyroX = MPU6050_Data.Gyroscope_X;
 		gyroY = MPU6050_Data.Gyroscope_Y;
+		gyroZ = MPU6050_Data.Gyroscope_Z;
+
+		// Convert to scale data
+		accX = (accX - offset_accX) * MPU6050_Data.Acce_Mult * scale_accX;
+		accY = (accY - offset_accY) * MPU6050_Data.Acce_Mult * scale_accY;
+		accZ = (accZ - offset_accZ) * MPU6050_Data.Acce_Mult * scale_accZ;
+
+		float gyroXrate = (gyroX - offset_gyroX) * MPU6050_Data.Gyro_Mult; // Convert to deg/s
+		float gyroYrate = (gyroY - offset_gyroY) * MPU6050_Data.Gyro_Mult; // Convert to deg/s
+		float gyroZrate = (gyroZ - offset_gyroZ) * MPU6050_Data.Gyro_Mult;
 
 		float roll = atan2(-accY, accZ) * RAD_TO_DEG;
-		float pitch = atan(-accX / sqrt1(Square(accY) + Square(accZ))) * RAD_TO_DEG;
+		float pitch = atan(-accX / sqrtf(Square(accY) + Square(accZ))) * RAD_TO_DEG;
 
-		float gyroXrate = gyroX * MPU6050_Data.Gyro_Mult; // Convert to deg/s
-		float gyroYrate = gyroY * MPU6050_Data.Gyro_Mult; // Convert to deg/s
+
 
 		// This fixes the transition problem when the accelerometer angle jumps between -180 and 180 degrees
 		if ((roll < -90 && kalAngleX > 90) || (roll > 90 && kalAngleX < -90)) {
@@ -75,12 +113,12 @@ void MPU6050Task(void) {
 		K_Data.kalAngleY = kalAngleY;
 		taskEXIT_CRITICAL();
 
-//		UART1_puts("\r\n");
-//		shell_float2str(kalAngleX, uart_out);
-//		UART1_puts(uart_out);
-//		UART1_puts(" ");
-//		shell_float2str(kalAngleY, uart_out);
-//		UART1_puts(uart_out);
+		UART1_puts("\r\n");
+		shell_float2str(kalAngleX, uart_out);
+		UART1_puts(uart_out);
+		UART1_puts(" ");
+		shell_float2str(kalAngleY, uart_out);
+		UART1_puts(uart_out);
 		
 		vTaskSuspend(xSensorHandle);
 	}
@@ -240,7 +278,7 @@ uint8_t MPU6050_Task_Creat() {
 
 void Init_MPU6050() {
 	/* Initialize MPU6050 sensor 0, address = 0xD0, AD0 pin on sensor is low */
-	while (MPU6050_Init(TM_MPU6050_Accelerometer_4G, TM_MPU6050_Gyroscope_500s)
+	while (MPU6050_Init(TM_MPU6050_Accelerometer_8G, TM_MPU6050_Gyroscope_1000s)
 			!= TM_MPU6050_Result_Ok) {
 		/* Display message to user */
 		UART1_puts("\r\nRemote is NOT READY! PLEASE Checkout.");

@@ -11,5 +11,6 @@ void shell_float2str(float f, char *str);
 
 uint16_t shell_atoi(char *str);
 float sqrt1(const float x);
+void delay(uint32_t d);
 
 #endif

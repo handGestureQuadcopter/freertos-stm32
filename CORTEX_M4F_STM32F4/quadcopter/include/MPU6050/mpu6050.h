@@ -28,7 +28,7 @@ typedef struct {
 #define	MPU6050_I2C					I2C1
 
 /* Default I2C clock */
-#define MPU6050_I2C_CLOCK			400000
+#define MPU6050_I2C_CLOCK			100000
 
 /* Default I2C address */
 #define MPU6050_I2C_ADDR			0xD0

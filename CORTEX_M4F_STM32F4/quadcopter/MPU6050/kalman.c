@@ -4,7 +4,7 @@ void initKalman(Kalman *K) {
 	/* We will set the variables like so, these can also be tuned by the user */
 	K->Q_angle = 0.001;
 	K->Q_bias = 0.003;
-	K->R_measure = 0.03;
+	K->R_measure = 0.0001;
 
 	K->angle = 0; // Reset the angle
 	K->bias = 0; // Reset bias

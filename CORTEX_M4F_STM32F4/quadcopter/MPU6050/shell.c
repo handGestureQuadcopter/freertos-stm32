@@ -77,3 +77,7 @@ float sqrt1(const float x) {
 
 	return u.x;
 }
+
+void delay(uint32_t d) {
+	while (d--) {};
+}
