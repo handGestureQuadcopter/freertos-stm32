@@ -5,7 +5,7 @@
 char buffer[MAX_UART_INPUT];
 uint8_t buffer_index = 0;
 extern MotorSpeed_t motorspeed;
-extern Angel_Data Angel;
+extern Angle_Data Angle;
 
 void UART1_RCC_Configuration()
 {
@@ -178,10 +178,10 @@ void remote_ctrl(char *str)
 			}			
 			else{
 				UART1_puts("\r\nSetpointX : ");
-				shell_float2str(setSetPointX(Angel.Roll),temp);
+				shell_float2str(setSetPointX(Angle.Roll),temp);
 				UART1_puts(temp);
 				UART1_puts("\r\nSetpointY : ");
-				shell_float2str(setSetPointY(Angel.Pitch),temp);
+				shell_float2str(setSetPointY(Angle.Pitch),temp);
 				UART1_puts(temp);	
 			}	
 			break;

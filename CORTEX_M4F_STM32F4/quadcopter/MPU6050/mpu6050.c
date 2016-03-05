@@ -10,7 +10,7 @@
 #define Lowpass(old, new, alpha) ((1.0f - alpha) * old + alpha * new)
 
 xTaskHandle xSensorHandle;
-Angel_Data Angel;
+Angle_Data Angle;
 static TM_MPU6050_t MPU6050_Data;
 
 float acc_lowpass_gain = 0.03f, gyro_lowpass_gain =0.03f, complementAlpha = 0.0001f;
@@ -121,8 +121,8 @@ void MPU6050Task(void) {
 		float pitch = atanf(-predict_X / sqrtf(Square(predict_Y) + Square(predict_Z))) * RAD_TO_DEG;
 
 		taskENTER_CRITICAL();
-		Angel.Roll = roll;
-		Angel.Pitch = pitch;
+		Angle.Roll = roll;
+		Angle.Pitch = pitch;
 		taskEXIT_CRITICAL();
 
 		UART1_puts("\r\n");

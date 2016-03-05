@@ -2,7 +2,7 @@
 #include "uart.h"
 
 extern MotorSpeed_t motorspeed;
-extern Angel_Data Angel;
+extern Angle_Data Angle;
 
 float KP = 0.2f;
 float KI = 0;
@@ -72,8 +72,8 @@ void PIDTask()
 	
 	while(1){
 		taskENTER_CRITICAL();
-		roll = Angel.Roll;
-		pitch = Angel.Pitch;
+		roll = Angle.Roll;
+		pitch = Angle.Pitch;
 		taskEXIT_CRITICAL();
 
 		//x axis for roll	
