@@ -5,7 +5,7 @@
 char buffer[MAX_UART_INPUT];
 uint8_t buffer_index = 0;
 extern MotorSpeed_t motorspeed;
-extern Kalman_Angel_Data K_Data;
+extern Angel_Data Angel;
 
 void UART1_RCC_Configuration()
 {
@@ -178,10 +178,10 @@ void remote_ctrl(char *str)
 			}			
 			else{
 				UART1_puts("\r\nSetpointX : ");
-				shell_float2str(setSetPointX(K_Data.kalAngleX),temp);
+				shell_float2str(setSetPointX(Angel.Roll),temp);
 				UART1_puts(temp);
 				UART1_puts("\r\nSetpointY : ");
-				shell_float2str(setSetPointY(K_Data.kalAngleY),temp);	
+				shell_float2str(setSetPointY(Angel.Pitch),temp);
 				UART1_puts(temp);	
 			}	
 			break;
@@ -247,6 +247,18 @@ void remote_ctrl(char *str)
 				UART1_puts("Hover\r\n\0");
 			}
 			Change_Speed();
+			break;
+		case 9:
+			/* channel 1 for acc_gain
+			 * channel 2 for gyro_gain
+			 * channel 3 for complement alpha
+			 *
+			 * command 0 for / 3
+			 * command else for * 3
+			 */
+			channel = command / 100;
+			command %= 100;
+			set_gain(channel, command);
 			break;
 	}
 }

@@ -16,9 +16,9 @@ extern C {
 #include "stm32f4xx_tim.h"
 
 typedef struct {
-	float kalAngleX;
-	float kalAngleY; // Calculated angle using a Kalman filter
-}Kalman_Angel_Data;
+	float Roll;
+	float Pitch; // Calculated angle using a Kalman filter
+}Angel_Data;
 
 #define RAD_TO_DEG 57.295779513082320876798154814105f
 
@@ -207,6 +207,8 @@ uint8_t MPU6050_Task_Creat();
 void Init_MPU6050();
 
 void Enable_TIM2_INTERRUPT();
+
+void set_gain(uint16_t channel, uint16_t command);
  
 /**
  * @}

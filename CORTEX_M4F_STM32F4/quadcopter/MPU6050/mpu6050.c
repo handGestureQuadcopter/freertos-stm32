@@ -1,5 +1,4 @@
 #include "mpu6050.h"
-#include "kalman.h"
 #include "i2c.h"
 #include "shell.h"
 #include "uart.h"
@@ -8,40 +7,42 @@
 
 #define Square(x) ((x)*(x))
 #define Abs(x) ((x < 0) ? (0-x) : x)
-//#define Average(x, y) ((x + y) / 2)
+#define Lowpass(old, new, alpha) ((1.0f - alpha) * old + alpha * new)
 
 xTaskHandle xSensorHandle;
+Angel_Data Angel;
 static TM_MPU6050_t MPU6050_Data;
-float const dt = SENSOR_PERIOD_MS / 1000.0;
 
-Kalman_Angel_Data K_Data;
+float acc_lowpass_gain = 0.03f, gyro_lowpass_gain =0.03f, complementAlpha = 0.0001f;
 
 void MPU6050Task(void) {
 	char uart_out[32];
 
-	Kalman kalmanX; // Create the Kalman instances
-	Kalman kalmanY;
-
 	/* IMU Data */
+	float inv_R_raw, inv_R_true;
 	float accX, accY, accZ;
 	float gyroX, gyroY, gyroZ;
-	float kalAngleX, kalAngleY;
+	float filter_accX = 0.0f, filter_accY = 0.0f, filter_accZ = 1.0f;
+	float filter_gyroX = 0.0f, filter_gyroY = 0.0f, filter_gyroZ = 1.0f;
+	float predict_X = 0.0f, predict_Y = 0.0f, predict_Z = 1.0f;
+//	float acc_lowpass_gain = 0.03f, gyro_lowpass_gain =0.03f, complementAlpha = 0.0001f;
+	float const dt = SENSOR_PERIOD_MS / 1000.0;
 
 	/* Offset Data. Example of data for current board
 
 		Raw_Axis |  min   | max  |  average(offset) | 1g_scale	|>
 
-		    X	   -4013	4222	104					4117
-		    Y	   -4097	4052    -22 				4074
-		    Z	   -4378  	3952	-213				4165
+		    X	   -4066	4096	15					4081
+		    Y	   -4086	4060    -13 				4073
+		    Z	   -4256  	3940	-158				4098
 
 		But actual raw_data for 1g in 8g_full_scale setting should be 4096
 		So that the modify factor for acc_scale will be 4096/(measured1g_scale) (i.e. scale it to 4096)
 	*/
-	float offset_accX = 104.0f, offset_accY = -22.0f, offset_accZ = -213.0f;
-	float scale_accX = 4096.0f / 4117.0f;
-	float scale_accY = 4096.0f / 4074.0f;
-	float scale_accZ = 4096.0f / 4165.0f;
+	float offset_accX = 15.0f, offset_accY = -13.0f, offset_accZ = -158.0f;
+	float scale_accX = 4096.0f / 4081.0f;
+	float scale_accY = 4096.0f / 4073.0f;
+	float scale_accZ = 4096.0f / 4098.0f;
 
 	/* Gyro offset */
 	float offset_gyroX = 0.0f, offset_gyroY = 0.0f, offset_gyroZ = 0.0f;
@@ -54,20 +55,6 @@ void MPU6050Task(void) {
 
 		delay(100);
 	}
-
-	initKalman(&kalmanX);
-	initKalman(&kalmanY);
-	MPU6050_ReadAccelerometer();
-
-	accX = MPU6050_Data.Accelerometer_X;
-	accY = MPU6050_Data.Accelerometer_Y;
-	accZ = MPU6050_Data.Accelerometer_Z;
-
-	float roll = atan2(-accY, accZ) * RAD_TO_DEG;
-	float pitch = atan(-accX / sqrtf(Square(accY) + Square(accZ))) * RAD_TO_DEG;
-
-	setAngle(&kalmanX, roll); // Set starting angle
-	setAngle(&kalmanY, pitch);
 
 	Enable_TIM2_INTERRUPT();
 	while (1) {
@@ -87,37 +74,62 @@ void MPU6050Task(void) {
 		accY = (accY - offset_accY) * MPU6050_Data.Acce_Mult * scale_accY;
 		accZ = (accZ - offset_accZ) * MPU6050_Data.Acce_Mult * scale_accZ;
 
-		float gyroXrate = (gyroX - offset_gyroX) * MPU6050_Data.Gyro_Mult; // Convert to deg/s
-		float gyroYrate = (gyroY - offset_gyroY) * MPU6050_Data.Gyro_Mult; // Convert to deg/s
-		float gyroZrate = (gyroZ - offset_gyroZ) * MPU6050_Data.Gyro_Mult;
+		// Convert to degree
+		gyroX = (gyroX - offset_gyroX) * MPU6050_Data.Gyro_Mult;
+		gyroY = (gyroY - offset_gyroY) * MPU6050_Data.Gyro_Mult;
+		gyroZ = (gyroZ - offset_gyroZ) * MPU6050_Data.Gyro_Mult;
 
-		float roll = atan2(-accY, accZ) * RAD_TO_DEG;
-		float pitch = atan(-accX / sqrtf(Square(accY) + Square(accZ))) * RAD_TO_DEG;
+		filter_accX = Lowpass(filter_accX, accX, acc_lowpass_gain);
+		filter_accY = Lowpass(filter_accY, accY, acc_lowpass_gain);
+		filter_accZ = Lowpass(filter_accZ, accZ, acc_lowpass_gain);
 
+		filter_gyroX = Lowpass(filter_gyroX, gyroX, gyro_lowpass_gain);
+		filter_gyroY = Lowpass(filter_gyroY, gyroY, gyro_lowpass_gain);
+		filter_gyroZ = Lowpass(filter_gyroZ, gyroZ, gyro_lowpass_gain);
 
+		inv_R_raw = 1.0f / sqrtf(Square(filter_accX) + Square(filter_accY) + Square(filter_accZ));
+		accX = filter_accX * inv_R_raw;
+		accY = filter_accY * inv_R_raw;
+		accZ = filter_accZ * inv_R_raw;
 
-		// This fixes the transition problem when the accelerometer angle jumps between -180 and 180 degrees
-		if ((roll < -90 && kalAngleX > 90) || (roll > 90 && kalAngleX < -90)) {
-			setAngle(&kalmanX, roll);
-			kalAngleX = roll;
-		} else {
-			kalAngleX = getAngle(&kalmanX, roll, gyroXrate, dt); // Calculate the angle using a Kalman filter
-		}
+//		gyroX = gyroX * dt / RAD_TO_DEG;
+//		gyroY = gyroY * dt / RAD_TO_DEG;
+//		gyroZ = gyroZ * dt / RAD_TO_DEG;
+		gyroX = filter_gyroX * dt / RAD_TO_DEG;
+		gyroY = filter_gyroY * dt / RAD_TO_DEG;
+		gyroZ = filter_gyroZ * dt / RAD_TO_DEG;
 
-		if (Abs(kalAngleX) > 90)
-			gyroYrate = -gyroYrate; // Invert rate, so it fits the restriced accelerometer reading
-		kalAngleY = getAngle(&kalmanY, pitch, gyroYrate, dt);
+		predict_X = predict_X + predict_Y * gyroZ;
+		predict_Y = -predict_X * gyroZ + predict_Y;
+
+		predict_Y = predict_Y + predict_Z * gyroX;
+		predict_Z = -predict_Y * gyroX + predict_Z;
+
+		predict_X = predict_X - predict_Z * gyroY;
+		predict_Z = predict_X * gyroY + predict_Z;
+
+		predict_X = Lowpass(predict_X, accX, complementAlpha);
+		predict_Y = Lowpass(predict_Y, accY, complementAlpha);
+		predict_Z = Lowpass(predict_Z, accZ, complementAlpha);
+
+		inv_R_true = sqrtf(Square(predict_X) + Square(predict_Y) + Square(predict_Z));
+		predict_X = predict_X * inv_R_true;
+		predict_Y = predict_Y * inv_R_true;
+		predict_Z = predict_Z * inv_R_true;
+
+		float roll = atanf(-predict_Y / predict_Z) * RAD_TO_DEG;
+		float pitch = atanf(-predict_X / sqrtf(Square(predict_Y) + Square(predict_Z))) * RAD_TO_DEG;
 
 		taskENTER_CRITICAL();
-		K_Data.kalAngleX = kalAngleX;
-		K_Data.kalAngleY = kalAngleY;
+		Angel.Roll = roll;
+		Angel.Pitch = pitch;
 		taskEXIT_CRITICAL();
 
 		UART1_puts("\r\n");
-		shell_float2str(kalAngleX, uart_out);
+		shell_float2str(roll, uart_out);
 		UART1_puts(uart_out);
 		UART1_puts(" ");
-		shell_float2str(kalAngleY, uart_out);
+		shell_float2str(pitch, uart_out);
 		UART1_puts(uart_out);
 		
 		vTaskSuspend(xSensorHandle);
@@ -314,4 +326,45 @@ void TIM2_IRQHandler(void) {
 		TIM_ClearITPendingBit(TIM2, /*TIM_IT_Update*/TIM_FLAG_Update);
 		vTaskResume(xSensorHandle);
 	}
+}
+
+void set_gain(uint16_t channel, uint16_t command) {
+	/* channel 1 for acc_gain
+	 * channel 2 for gyro_gain
+	 * channel 3 for complement alpha
+	 *
+	 * command 0 for / 3
+	 * command else for * 3
+	 */
+	char usart_out[32];
+	switch (channel) {
+		case 1:
+			if (command)
+				acc_lowpass_gain *= 3;
+			else
+				acc_lowpass_gain /= 3;
+			UART1_puts("/r/n acc_gain :  ");
+			shell_float2str(acc_lowpass_gain, usart_out);
+			UART1_puts(usart_out);
+			break;
+		case 2:
+			if (command)
+				gyro_lowpass_gain *= 3;
+			else
+				gyro_lowpass_gain /= 3;
+			UART1_puts("/r/n gyro_gain :  ");
+			shell_float2str(gyro_lowpass_gain, usart_out);
+			UART1_puts(usart_out);
+			break;
+		case 3:
+			if (command)
+				complementAlpha *=3;
+			else
+				complementAlpha /= 3;
+			UART1_puts("/r/n alpha :  ");
+			shell_float2str(complementAlpha, usart_out);
+			UART1_puts(usart_out);
+			break;
+	}
+	delay(1000);
 }
