@@ -173,17 +173,17 @@ void remote_ctrl(char *str)
 				shell_float2str(getSetPointX(),temp);
 				UART1_puts(temp);
 				UART1_puts("\r\nSetpointY : ");
-				shell_float2str(getSetPointY(),temp);	
+				shell_float2str(getSetPointY(),temp);
 				UART1_puts(temp);
-			}			
+			}
 			else{
 				UART1_puts("\r\nSetpointX : ");
 				shell_float2str(setSetPointX(Angle.Roll),temp);
 				UART1_puts(temp);
 				UART1_puts("\r\nSetpointY : ");
 				shell_float2str(setSetPointY(Angle.Pitch),temp);
-				UART1_puts(temp);	
-			}	
+				UART1_puts(temp);
+			}
 			break;
 		case 4:
 			UART1_puts("\r\nPID 1 2 3 4 : \0");

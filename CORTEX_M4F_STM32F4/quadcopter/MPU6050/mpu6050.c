@@ -6,7 +6,6 @@
 #define SENSOR_PERIOD_MS 50
 
 #define Square(x) ((x)*(x))
-#define Abs(x) ((x < 0) ? (0-x) : x)
 #define Lowpass(old, new, alpha) ((1.0f - alpha) * old + alpha * new)
 
 xTaskHandle xSensorHandle;
@@ -19,14 +18,20 @@ void MPU6050Task(void) {
 	char uart_out[32];
 
 	/* IMU Data */
-	float inv_R_raw, inv_R_true;
+	float roll = 0.0f, pitch = 0.0f;
+	float R_raw, R_true, inv_R_raw, inv_R_true;
 	float accX, accY, accZ;
+	float scale_accX, scale_accY, scale_accZ;
 	float gyroX, gyroY, gyroZ;
+	float scale_gyroX, scale_gyroY, scale_gyroZ;
+	float delta_gyroX, delta_gyroY, delta_gyroZ;
 	float filter_accX = 0.0f, filter_accY = 0.0f, filter_accZ = 1.0f;
-	float filter_gyroX = 0.0f, filter_gyroY = 0.0f, filter_gyroZ = 1.0f;
+	float filter_gyroX = 0.0f, filter_gyroY = 0.0f, filter_gyroZ = 0.0f;
 	float predict_X = 0.0f, predict_Y = 0.0f, predict_Z = 1.0f;
+	float pre_X = 0.0f, pre_Y = 0.0f, pre_Z = 0.0f;
+	float N_Ax_g = 0.0f, N_Ay_g = 0.0f, N_Az_g = 0.0f;
 //	float acc_lowpass_gain = 0.03f, gyro_lowpass_gain =0.03f, complementAlpha = 0.0001f;
-	float const dt = SENSOR_PERIOD_MS / 1000.0;
+	float const dt = SENSOR_PERIOD_MS / 1000.0f;
 
 	/* Offset Data. Example of data for current board
 
@@ -40,20 +45,22 @@ void MPU6050Task(void) {
 		So that the modify factor for acc_scale will be 4096/(measured1g_scale) (i.e. scale it to 4096)
 	*/
 	float offset_accX = 15.0f, offset_accY = -13.0f, offset_accZ = -158.0f;
-	float scale_accX = 4096.0f / 4081.0f;
-	float scale_accY = 4096.0f / 4073.0f;
-	float scale_accZ = 4096.0f / 4098.0f;
+	float scale_acc_X = 4096.0f / 4081.0f;
+	float scale_acc_Y = 4096.0f / 4073.0f;
+	float scale_acc_Z = 4096.0f / 4098.0f;
+
+	vTaskDelay(4000);
 
 	/* Gyro offset */
 	float offset_gyroX = 0.0f, offset_gyroY = 0.0f, offset_gyroZ = 0.0f;
-	for (int i = 0; i < 1000; i++) {
+	for (int i = 0; i < 2000; i++) {
 
 		MPU6050_ReadGyroscope();
-		offset_gyroX +=	((float) MPU6050_Data.Gyroscope_X) / 1000.0;
-		offset_gyroY +=	((float) MPU6050_Data.Gyroscope_Y) / 1000.0;
-		offset_gyroZ +=	((float) MPU6050_Data.Gyroscope_Z) / 1000.0;
+		offset_gyroX += ((float) MPU6050_Data.Gyroscope_X / 2000.0f);
+		offset_gyroY +=	((float) MPU6050_Data.Gyroscope_Y / 2000.0f);
+		offset_gyroZ +=	((float) MPU6050_Data.Gyroscope_Z / 2000.0f);
 
-		delay(100);
+		delay(2000);
 	}
 
 	Enable_TIM2_INTERRUPT();
@@ -70,60 +77,76 @@ void MPU6050Task(void) {
 		gyroZ = MPU6050_Data.Gyroscope_Z;
 
 		// Convert to scale data
-		accX = (accX - offset_accX) * MPU6050_Data.Acce_Mult * scale_accX;
-		accY = (accY - offset_accY) * MPU6050_Data.Acce_Mult * scale_accY;
-		accZ = (accZ - offset_accZ) * MPU6050_Data.Acce_Mult * scale_accZ;
+		scale_accX = (accX - offset_accX) * MPU6050_Data.Acce_Mult * scale_acc_X;
+		scale_accY = (accY - offset_accY) * MPU6050_Data.Acce_Mult * scale_acc_Y;
+		scale_accZ = (accZ - offset_accZ) * MPU6050_Data.Acce_Mult * scale_acc_Z;
 
 		// Convert to degree
-		gyroX = (gyroX - offset_gyroX) * MPU6050_Data.Gyro_Mult;
-		gyroY = (gyroY - offset_gyroY) * MPU6050_Data.Gyro_Mult;
-		gyroZ = (gyroZ - offset_gyroZ) * MPU6050_Data.Gyro_Mult;
+		scale_gyroX = -(gyroX - offset_gyroX) * MPU6050_Data.Gyro_Mult;
+		scale_gyroY = (gyroY - offset_gyroY) * MPU6050_Data.Gyro_Mult;
+		scale_gyroZ = -(gyroZ - offset_gyroZ) * MPU6050_Data.Gyro_Mult;
 
-		filter_accX = Lowpass(filter_accX, accX, acc_lowpass_gain);
-		filter_accY = Lowpass(filter_accY, accY, acc_lowpass_gain);
-		filter_accZ = Lowpass(filter_accZ, accZ, acc_lowpass_gain);
+		filter_accX = Lowpass(filter_accX, scale_accX, acc_lowpass_gain);
+		filter_accY = Lowpass(filter_accY, scale_accY, acc_lowpass_gain);
+		filter_accZ = Lowpass(filter_accZ, scale_accZ, acc_lowpass_gain);
 
-		filter_gyroX = Lowpass(filter_gyroX, gyroX, gyro_lowpass_gain);
-		filter_gyroY = Lowpass(filter_gyroY, gyroY, gyro_lowpass_gain);
-		filter_gyroZ = Lowpass(filter_gyroZ, gyroZ, gyro_lowpass_gain);
+		filter_gyroX = Lowpass(filter_gyroX, scale_gyroX, gyro_lowpass_gain);
+		filter_gyroY = Lowpass(filter_gyroY, scale_gyroY, gyro_lowpass_gain);
+		filter_gyroZ = Lowpass(filter_gyroZ, scale_gyroZ, gyro_lowpass_gain);
 
-		inv_R_raw = 1.0f / sqrtf(Square(filter_accX) + Square(filter_accY) + Square(filter_accZ));
-		accX = filter_accX * inv_R_raw;
-		accY = filter_accY * inv_R_raw;
-		accZ = filter_accZ * inv_R_raw;
+		R_raw = sqrtf(Square(filter_accX) + Square(filter_accY) + Square(filter_accZ));
+		inv_R_raw = 1.0f / R_raw;
+		N_Ax_g = filter_accX * inv_R_raw;
+		N_Ay_g = filter_accY * inv_R_raw;
+		N_Az_g = filter_accZ * inv_R_raw;
 
-//		gyroX = gyroX * dt / RAD_TO_DEG;
-//		gyroY = gyroY * dt / RAD_TO_DEG;
-//		gyroZ = gyroZ * dt / RAD_TO_DEG;
-		gyroX = filter_gyroX * dt / RAD_TO_DEG;
-		gyroY = filter_gyroY * dt / RAD_TO_DEG;
-		gyroZ = filter_gyroZ * dt / RAD_TO_DEG;
+//		delta_gyroX = gyroX * dt * DEG_TO_RAD;
+//		delta_gyroY = gyroY * dt * DEG_TO_RAD;
+//		delta_gyroZ = gyroZ * dt * DEG_TO_RAD;
+		delta_gyroX = filter_gyroX * dt * DEG_TO_RAD;
+		delta_gyroY = filter_gyroY * dt * DEG_TO_RAD;
+		delta_gyroZ = filter_gyroZ * dt * DEG_TO_RAD;
 
-		predict_X = predict_X + predict_Y * gyroZ;
-		predict_Y = -predict_X * gyroZ + predict_Y;
+		predict_X = predict_X + (predict_Y * delta_gyroZ);
+		predict_Y = - (predict_X * delta_gyroZ) + predict_Y;
 
-		predict_Y = predict_Y + predict_Z * gyroX;
-		predict_Z = -predict_Y * gyroX + predict_Z;
+		predict_Y = predict_Y + (predict_Z * delta_gyroX);
+		predict_Z = - (predict_Y * delta_gyroX) + predict_Z;
 
-		predict_X = predict_X - predict_Z * gyroY;
-		predict_Z = predict_X * gyroY + predict_Z;
+		predict_X = predict_X - (predict_Z * delta_gyroY);
+		predict_Z = (predict_X * delta_gyroY) + predict_Z;
 
-		predict_X = Lowpass(predict_X, accX, complementAlpha);
-		predict_Y = Lowpass(predict_Y, accY, complementAlpha);
-		predict_Z = Lowpass(predict_Z, accZ, complementAlpha);
+		pre_X = predict_X;
+		pre_Y = predict_Y;
+		pre_Z = predict_Z;
 
-		inv_R_true = sqrtf(Square(predict_X) + Square(predict_Y) + Square(predict_Z));
+		predict_X = Lowpass(pre_X, N_Ax_g, complementAlpha);
+		predict_Y = Lowpass(pre_Y, N_Ay_g, complementAlpha);
+		predict_Z = Lowpass(pre_Z, N_Az_g, complementAlpha);
+
+		R_true = sqrtf(Square(predict_X) + Square(predict_Y) + Square(predict_Z));
+		inv_R_true = 1.0f / R_true;
 		predict_X = predict_X * inv_R_true;
 		predict_Y = predict_Y * inv_R_true;
 		predict_Z = predict_Z * inv_R_true;
 
-		float roll = atanf(-predict_Y / predict_Z) * RAD_TO_DEG;
-		float pitch = atanf(-predict_X / sqrtf(Square(predict_Y) + Square(predict_Z))) * RAD_TO_DEG;
+		pitch = atanf(predict_Y / predict_Z) * RAD_TO_DEG;
+		roll = atanf(-predict_X / sqrtf(Square(predict_Y) + Square(predict_Z))) * RAD_TO_DEG;
 
 		taskENTER_CRITICAL();
 		Angle.Roll = roll;
 		Angle.Pitch = pitch;
 		taskEXIT_CRITICAL();
+
+//		UART1_puts("\r\n");
+//		shell_float2str(scale_gyroX, uart_out);
+//		UART1_puts(uart_out);
+//		UART1_puts(" ");
+//		shell_float2str(scale_gyroY, uart_out);
+//		UART1_puts(uart_out);
+//		UART1_puts(" ");
+//		shell_float2str(scale_gyroZ, uart_out);
+//		UART1_puts(uart_out);
 
 		UART1_puts("\r\n");
 		shell_float2str(roll, uart_out);
@@ -142,6 +165,10 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 
 	I2C_MPU6050_Init(MPU6050_I2C, MPU6050_I2C_CLOCK);
 
+	// reset
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x80);
+	delay(3000000);
+
 	/* Check if device is connected */
 	if (!MPU6050_I2C_IsDeviceConnected(MPU6050_I2C_ADDR)) {
 		/* Return error */
@@ -155,7 +182,7 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 	}
 
 	// Wakeup MPU6050, PLL with Z axis gyroscope reference
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x03);
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x02);
 
 	// Enable low-pass filter 
 	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_CONFIG, 0x01);
@@ -323,7 +350,7 @@ void Enable_TIM2_INTERRUPT() {
 
 void TIM2_IRQHandler(void) {
 	if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
-		TIM_ClearITPendingBit(TIM2, /*TIM_IT_Update*/TIM_FLAG_Update);
+		TIM_ClearITPendingBit(TIM2, TIM_FLAG_Update);
 		vTaskResume(xSensorHandle);
 	}
 }

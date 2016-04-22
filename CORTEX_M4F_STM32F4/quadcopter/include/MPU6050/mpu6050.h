@@ -20,7 +20,9 @@ typedef struct {
 	float Pitch; // Calculated angle using a Kalman filter
 }Angle_Data;
 
-#define RAD_TO_DEG 57.295779513082320876798154814105f
+#define RAD_TO_DEG 57.2957795130823208768f
+#define DEG_TO_RAD 0.01745329251994329577f
+#define M_PI 3.14159265359
 
 #define wGyro 5
 

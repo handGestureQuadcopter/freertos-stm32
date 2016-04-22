@@ -5,16 +5,16 @@ extern MotorSpeed_t motorspeed;
 extern Angle_Data Angle;
 
 float KP = 0.2f;
-float KI = 0;
+float KI = 0.0;
 float KD = 0.0f;
 float SETPOINT_X = 0;
 float SETPOINT_Y = 0;
 
 uint8_t PID_Task_Creat() {
 	BaseType_t ret = xTaskCreate(PIDTask,"PID",512,(void *) NULL,tskIDLE_PRIORITY + 4, NULL);
-	if (ret != pdPASS)  
+	if (ret != pdPASS)
 		return 0;
-	return 1;   
+	return 1;
 }
 
 float getKP(){return KP;}
@@ -69,6 +69,8 @@ void PIDTask()
 	UART1_puts("WAIT FOR ESC\r\n\0");
 	vTaskDelay(5000);
 	UART1_puts("Start PID\r\n\0");
+	setSetPointX(Angle.Roll);
+	setSetPointY(Angle.Pitch);
 	
 	while(1){
 		taskENTER_CRITICAL();
@@ -89,7 +91,7 @@ void PIDTask()
 		integral_Y = calculateI(integral_Y, error_Y);
 		derivative_Y = calculateD(error_Y, pre_error_Y);
 		PID_Y(error_Y,integral_Y,derivative_Y);
-		pre_error_Y = error_Y;	
+		pre_error_Y = error_Y;
 		Change_Speed();
 
 		vTaskDelay(dt);
@@ -110,13 +112,12 @@ float calculateP_Y(float pitch)
 	return error;
 }
 
-
 float calculateI(float integral, float error)
-{		
+{
 	return (0.66) * (integral + (error * dt));
 }
 
-float calculateD(float error, float pre_error)	
+float calculateD(float error, float pre_error)
 {
 	return ((error - pre_error) / dt);
 }
@@ -131,6 +132,7 @@ void PID_X(float error, float integral, float derivative)
 	motorspeed.magicNumber3 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber3 - output));
 	motorspeed.magicNumber4 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber4 + output));
 }
+
 void PID_Y(float error, float integral, float derivative)
 {
 	float output;
@@ -140,5 +142,18 @@ void PID_Y(float error, float integral, float derivative)
 	motorspeed.magicNumber2 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber2 - output));
 	motorspeed.magicNumber3 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber3 + output));
 	motorspeed.magicNumber4 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber4 + output));
+}
 
+void PID_run(float errorX, float errorY, float integral, float derivative)
+{
+	float outputX, outputY;
+	outputX = (KP * errorX) + (KI * integral) + (KD * derivative);
+	outputX = LOWWER_BOUND(UPPER_BOUND(outputX));
+	outputY = (KP * errorY) + (KI * integral) + (KD * derivative);
+	outputY = LOWWER_BOUND(UPPER_BOUND(outputY));
+	motorspeed.magicNumber1 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber1 + outputX - outputY));
+	motorspeed.magicNumber2 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber2 - outputX - outputY));
+	motorspeed.magicNumber3 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber3 - outputX + outputY));
+	motorspeed.magicNumber4 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber4 + outputX + outputY));
+	Change_Speed();
 }
