@@ -1,4 +1,5 @@
 #include "i2c.h"
+#include "mpu6050.h"
 
 static uint32_t MPU6050_I2C_Timeout;
 
@@ -21,7 +22,7 @@ void I2C_MPU6050_Init(I2C_TypeDef* I2Cx, int clock_speed) {
 	/* SCL and SDA pins configuration */
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz; //50MHz
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_OD;
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
@@ -243,6 +244,24 @@ void I2C_Write(I2C_TypeDef* I2Cx, uint8_t address, uint8_t reg, uint8_t data) {
 	I2C_Stop(I2Cx);
 }
 
+void I2C_WriteWord(I2C_TypeDef* I2Cx, uint8_t address, uint8_t reg, uint16_t data) {
+	I2C_Start(I2Cx, address, I2C_Direction_Transmitter, I2C_Ack_Disable);
+	I2C_WriteData(I2Cx, reg);
+	I2C_WriteData(I2Cx, (data >> 8));		// send MSB
+	I2C_WriteData(I2Cx, (data << 8));		// send LSB
+	I2C_Stop(I2Cx);
+}
+
+void I2C_WriteBytes(I2C_TypeDef* I2Cx, uint8_t address, uint8_t writeAddr, uint8_t length, uint8_t *data) {
+	int i = 0;
+	I2C_Start(I2Cx, address, I2C_Direction_Transmitter, I2C_Ack_Disable);
+	I2C_WriteData(I2Cx, writeAddr);
+	for (i = 0; i < length; i++) {
+		I2C_WriteData(I2Cx, data[i]);
+	}
+	I2C_Stop(I2Cx);
+}
+
 void I2C_WriteData(I2C_TypeDef* I2Cx, uint8_t data) {
 	/* Wait till I2C is not busy anymore */
 	MPU6050_I2C_Timeout = MPU6050_I2C_TIMEOUT;
@@ -254,4 +273,37 @@ void I2C_WriteData(I2C_TypeDef* I2Cx, uint8_t data) {
 
 	/* Send I2C data */
 	I2Cx->DR = data;
+}
+
+void I2C_WriteBit(uint8_t address, uint8_t shamt, uint8_t t_or_f) {
+	uint8_t temp;
+	temp = I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, address);
+	temp = t_or_f ? (temp | (1 << shamt)) : (temp & ~(1 << shamt));
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, address, temp);
+}
+
+void I2C_WriteBits(uint8_t address, uint8_t bitStart, uint8_t length, uint8_t data) {
+	uint8_t temp, mask;
+	temp = I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, address);
+	mask = ((1 << length) - 1) << (bitStart - length + 1);
+	data <<= (bitStart - length + 1);
+	data &= mask;
+	temp &= ~(mask);
+	temp |= data;
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, address, temp);
+}
+
+void I2C_ReadBit(uint8_t regAddr, uint8_t bitNum, uint8_t *data) {
+	uint8_t temp;
+	temp = I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, regAddr);
+	*data = temp & (1 << bitNum);
+}
+
+void I2C_ReadBits(uint8_t regAddr, uint8_t bitStart, uint8_t length, uint8_t *data) {
+	uint8_t mask, temp;
+	temp = I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, regAddr);
+	mask = ((1 << length) - 1) << (bitStart - length + 1);
+	temp &= mask;
+	temp >>= (bitStart - length + 1);
+	*data = temp;
 }

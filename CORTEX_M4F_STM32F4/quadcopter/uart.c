@@ -248,17 +248,17 @@ void remote_ctrl(char *str)
 			}
 			Change_Speed();
 			break;
-		case 9:
-			/* channel 1 for acc_gain
-			 * channel 2 for gyro_gain
-			 * channel 3 for complement alpha
-			 *
-			 * command 0 for / 3
-			 * command else for * 3
-			 */
-			channel = command / 100;
-			command %= 100;
-			set_gain(channel, command);
-			break;
+//		case 9:
+//			/* channel 1 for acc_gain
+//			 * channel 2 for gyro_gain
+//			 * channel 3 for complement alpha
+//			 *
+//			 * command 0 for / 3
+//			 * command else for * 3
+//			 */
+//			channel = command / 100;
+//			command %= 100;
+//			set_gain(channel, command);
+//			break;
 	}
 }

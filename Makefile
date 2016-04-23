@@ -27,6 +27,8 @@ define get_library_path
 endef
 LDFLAGS += -L $(call get_library_path,libc.a)
 LDFLAGS += -L $(call get_library_path,libgcc.a)
+LDFLAGS += -lc
+LDFLAGS += -lm
 
 # Basic configurations
 CFLAGS += -g -std=c99
@@ -95,7 +97,7 @@ OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/uart.o
 OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/pid.o
 OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/MPU6050/i2c.o
 OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/MPU6050/mpu6050.o
-OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/MPU6050/kalman.o
+OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/MPU6050/MPU6050_6Axis_MotionApps20.o
 OBJS += $(PWD)/CORTEX_M4F_STM32F4/quadcopter/MPU6050/shell.o
 CFLAGS += -I $(PWD)/CORTEX_M4F_STM32F4/quadcopter/include
 CFLAGS += -I $(PWD)/CORTEX_M4F_STM32F4/quadcopter/include/MPU6050

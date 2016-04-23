@@ -26,6 +26,18 @@ void I2C_ReadMulti(I2C_TypeDef* I2Cx, uint8_t address, uint8_t reg, uint8_t* dat
 
 void I2C_Write(I2C_TypeDef* I2Cx, uint8_t address, uint8_t reg, uint8_t data);
 
+void I2C_WriteWord(I2C_TypeDef* I2Cx, uint8_t address, uint8_t reg, uint16_t data);
+
+void I2C_WriteBytes(I2C_TypeDef* I2Cx, uint8_t address, uint8_t writeAddr, uint8_t length, uint8_t *data);
+
 void I2C_WriteData(I2C_TypeDef* I2Cx, uint8_t data);
+
+void I2C_WriteBit(uint8_t address, uint8_t shamt, uint8_t t_or_f);
+
+void I2C_WriteBits(uint8_t address, uint8_t bitStart, uint8_t length, uint8_t data);
+
+void I2C_ReadBit(uint8_t regAddr, uint8_t bitNum, uint8_t *data);
+
+void I2C_ReadBits(uint8_t regAddr, uint8_t bitStart, uint8_t length, uint8_t *data);
 
 #endif

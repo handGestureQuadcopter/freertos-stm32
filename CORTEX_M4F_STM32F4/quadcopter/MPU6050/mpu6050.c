@@ -2,6 +2,9 @@
 #include "i2c.h"
 #include "shell.h"
 #include "uart.h"
+#include "MPU6050_6Axis_MotionApps20.h"
+
+uint8_t MPUbuffer[14];
 
 #define SENSOR_PERIOD_MS 50
 
@@ -12,130 +15,61 @@ xTaskHandle xSensorHandle;
 Angle_Data Angle;
 static TM_MPU6050_t MPU6050_Data;
 
-float acc_lowpass_gain = 0.03f, gyro_lowpass_gain =0.03f, complementAlpha = 0.0001f;
+uint8_t *MPUdmpPacketBuffer;
+const uint16_t MPUdmpPacketSize = 42;
+uint8_t MPUverifyBuffer[MPU6050_DMP_MEMORY_CHUNK_SIZE];
+uint8_t MPUdevAddr;
+uint8_t MPUbuffer[14];
+uint16_t MPUfifoCount;     	// count of all bytes currently in FIFO
+uint8_t  MPUfifoBuffer[64];	// FIFO storage buffer
 
 void MPU6050Task(void) {
 	char uart_out[32];
 
-	/* IMU Data */
-	float roll = 0.0f, pitch = 0.0f;
-	float R_raw, R_true, inv_R_raw, inv_R_true;
-	float accX, accY, accZ;
-	float scale_accX, scale_accY, scale_accZ;
-	float gyroX, gyroY, gyroZ;
-	float scale_gyroX, scale_gyroY, scale_gyroZ;
-	float delta_gyroX, delta_gyroY, delta_gyroZ;
-	float filter_accX = 0.0f, filter_accY = 0.0f, filter_accZ = 1.0f;
-	float filter_gyroX = 0.0f, filter_gyroY = 0.0f, filter_gyroZ = 0.0f;
-	float predict_X = 0.0f, predict_Y = 0.0f, predict_Z = 1.0f;
-	float pre_X = 0.0f, pre_Y = 0.0f, pre_Z = 0.0f;
-	float N_Ax_g = 0.0f, N_Ay_g = 0.0f, N_Az_g = 0.0f;
-//	float acc_lowpass_gain = 0.03f, gyro_lowpass_gain =0.03f, complementAlpha = 0.0001f;
-	float const dt = SENSOR_PERIOD_MS / 1000.0f;
+	uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
+	uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
+	uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
+	uint16_t fifoCount;     // count of all bytes currently in FIFO
+	uint8_t fifoBuffer[64]; // FIFO storage buffer
 
-	/* Offset Data. Example of data for current board
+	Quaternion q;           // [w, x, y, z]         quaternion container
+	float euler[3];         // [psi, theta, phi]    Euler angle container
+	float roll, pitch;
 
-		Raw_Axis |  min   | max  |  average(offset) | 1g_scale	|>
+	MPUdmpInitialize();
+	MPUsetDMPEnabled(1);
 
-		    X	   -4066	4096	15					4081
-		    Y	   -4086	4060    -13 				4073
-		    Z	   -4256  	3940	-158				4098
-
-		But actual raw_data for 1g in 8g_full_scale setting should be 4096
-		So that the modify factor for acc_scale will be 4096/(measured1g_scale) (i.e. scale it to 4096)
-	*/
-	float offset_accX = 15.0f, offset_accY = -13.0f, offset_accZ = -158.0f;
-	float scale_acc_X = 4096.0f / 4081.0f;
-	float scale_acc_Y = 4096.0f / 4073.0f;
-	float scale_acc_Z = 4096.0f / 4098.0f;
-
-	vTaskDelay(4000);
-
-	/* Gyro offset */
-	float offset_gyroX = 0.0f, offset_gyroY = 0.0f, offset_gyroZ = 0.0f;
-	for (int i = 0; i < 2000; i++) {
-
-		MPU6050_ReadGyroscope();
-		offset_gyroX += ((float) MPU6050_Data.Gyroscope_X / 2000.0f);
-		offset_gyroY +=	((float) MPU6050_Data.Gyroscope_Y / 2000.0f);
-		offset_gyroZ +=	((float) MPU6050_Data.Gyroscope_Z / 2000.0f);
-
-		delay(2000);
-	}
+	mpuIntStatus = MPUgetIntStatus();
+	packetSize = MPUdmpGetFIFOPacketSize();
 
 	Enable_TIM2_INTERRUPT();
 	while (1) {
 
-		/* Read all data from sensor */
-		MPU6050_ReadAccGyo();
+		mpuIntStatus = MPUgetIntStatus();
+		fifoCount = MPUgetFIFOCount();
+		if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
+			MPUresetFIFO();
+			UART1_puts("FIFO overflow!");
+		} else if (mpuIntStatus & 0x02) {
+			while (fifoCount < packetSize)
+				fifoCount = MPUgetFIFOCount();
+			MPUgetFIFOBytes(fifoBuffer, packetSize);
+			fifoCount -= packetSize;
 
-		accX = MPU6050_Data.Accelerometer_X;
-		accY = MPU6050_Data.Accelerometer_Y;
-		accZ = MPU6050_Data.Accelerometer_Z;
-		gyroX = MPU6050_Data.Gyroscope_X;
-		gyroY = MPU6050_Data.Gyroscope_Y;
-		gyroZ = MPU6050_Data.Gyroscope_Z;
+			MPUdmpGetQuaternion(&q, fifoBuffer);
+			MPUdmpGetEuler(euler, &q);
 
-		// Convert to scale data
-		scale_accX = (accX - offset_accX) * MPU6050_Data.Acce_Mult * scale_acc_X;
-		scale_accY = (accY - offset_accY) * MPU6050_Data.Acce_Mult * scale_acc_Y;
-		scale_accZ = (accZ - offset_accZ) * MPU6050_Data.Acce_Mult * scale_acc_Z;
-
-		// Convert to degree
-		scale_gyroX = -(gyroX - offset_gyroX) * MPU6050_Data.Gyro_Mult;
-		scale_gyroY = (gyroY - offset_gyroY) * MPU6050_Data.Gyro_Mult;
-		scale_gyroZ = -(gyroZ - offset_gyroZ) * MPU6050_Data.Gyro_Mult;
-
-		filter_accX = Lowpass(filter_accX, scale_accX, acc_lowpass_gain);
-		filter_accY = Lowpass(filter_accY, scale_accY, acc_lowpass_gain);
-		filter_accZ = Lowpass(filter_accZ, scale_accZ, acc_lowpass_gain);
-
-		filter_gyroX = Lowpass(filter_gyroX, scale_gyroX, gyro_lowpass_gain);
-		filter_gyroY = Lowpass(filter_gyroY, scale_gyroY, gyro_lowpass_gain);
-		filter_gyroZ = Lowpass(filter_gyroZ, scale_gyroZ, gyro_lowpass_gain);
-
-		R_raw = sqrtf(Square(filter_accX) + Square(filter_accY) + Square(filter_accZ));
-		inv_R_raw = 1.0f / R_raw;
-		N_Ax_g = filter_accX * inv_R_raw;
-		N_Ay_g = filter_accY * inv_R_raw;
-		N_Az_g = filter_accZ * inv_R_raw;
-
-//		delta_gyroX = gyroX * dt * DEG_TO_RAD;
-//		delta_gyroY = gyroY * dt * DEG_TO_RAD;
-//		delta_gyroZ = gyroZ * dt * DEG_TO_RAD;
-		delta_gyroX = filter_gyroX * dt * DEG_TO_RAD;
-		delta_gyroY = filter_gyroY * dt * DEG_TO_RAD;
-		delta_gyroZ = filter_gyroZ * dt * DEG_TO_RAD;
-
-		predict_X = predict_X + (predict_Y * delta_gyroZ);
-		predict_Y = - (predict_X * delta_gyroZ) + predict_Y;
-
-		predict_Y = predict_Y + (predict_Z * delta_gyroX);
-		predict_Z = - (predict_Y * delta_gyroX) + predict_Z;
-
-		predict_X = predict_X - (predict_Z * delta_gyroY);
-		predict_Z = (predict_X * delta_gyroY) + predict_Z;
-
-		pre_X = predict_X;
-		pre_Y = predict_Y;
-		pre_Z = predict_Z;
-
-		predict_X = Lowpass(pre_X, N_Ax_g, complementAlpha);
-		predict_Y = Lowpass(pre_Y, N_Ay_g, complementAlpha);
-		predict_Z = Lowpass(pre_Z, N_Az_g, complementAlpha);
-
-		R_true = sqrtf(Square(predict_X) + Square(predict_Y) + Square(predict_Z));
-		inv_R_true = 1.0f / R_true;
-		predict_X = predict_X * inv_R_true;
-		predict_Y = predict_Y * inv_R_true;
-		predict_Z = predict_Z * inv_R_true;
-
-		pitch = atanf(predict_Y / predict_Z) * RAD_TO_DEG;
-		roll = atanf(-predict_X / sqrtf(Square(predict_Y) + Square(predict_Z))) * RAD_TO_DEG;
+//			sprintf(str_main, "#:%.2f:%.2f:%.2f\n", euler[0] * 180 / M_PI,
+//					euler[2] * 180 / M_PI, euler[1] * 180 / M_PI);
+//			USART_puts(USART1, str_main);
+//			//printf("Yaw: %.2f  Pitch: %.2f Roll: %.2f\n", euler[0]* 180/M_PI, euler[2]* 180/M_PI, euler[1]* 180/M_PI);
+		}
+		pitch = euler[2] * 180 / M_PI;
+		roll = euler[1] * 180 / M_PI;
 
 		taskENTER_CRITICAL();
-		Angle.Roll = roll;
-		Angle.Pitch = pitch;
+//		Angle.Roll = roll;
+//		Angle.Pitch = pitch;
 		taskEXIT_CRITICAL();
 
 //		UART1_puts("\r\n");
@@ -165,9 +99,9 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 
 	I2C_MPU6050_Init(MPU6050_I2C, MPU6050_I2C_CLOCK);
 
-	// reset
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x80);
-	delay(3000000);
+//	// reset
+//	I2C_WriteBit(MPU6050_PWR_MGMT_1, 8, 1);
+//	delay(3000000);
 
 	/* Check if device is connected */
 	if (!MPU6050_I2C_IsDeviceConnected(MPU6050_I2C_ADDR)) {
@@ -181,14 +115,17 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 		return TM_MPU6050_Result_DeviceInvalid;
 	}
 
-	// Wakeup MPU6050, PLL with Z axis gyroscope reference
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 0x02);
+	// PLL with X axis gyroscope reference
+	I2C_WriteBits(MPU6050_PWR_MGMT_1, MPU6050_PWR1_CLKSEL_BIT, MPU6050_PWR1_CLKSEL_LENGTH, MPU6050_CLOCK_PLL_XGYRO);
 
-	// Enable low-pass filter 
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_CONFIG, 0x01);
+	// Disable Sleep
+	I2C_WriteBit(MPU6050_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, 0);
 
-	// Gyroscope sample output rate = 1kH / (1+ 1) 
-	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_SMPLRT_DIV, 0x01);
+//	// Enable low-pass filter
+//	I2C_WriteBit(MPU6050_CONFIG, 0, 1);
+
+//	// Gyroscope sample output rate = 1kH / (1+ 1)
+//	I2C_WriteBit(MPU6050_SMPLRT_DIV, 0, 1);
 
 	/* Config accelerometer */
 	temp = I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_ACCEL_CONFIG);
@@ -355,43 +292,575 @@ void TIM2_IRQHandler(void) {
 	}
 }
 
-void set_gain(uint16_t channel, uint16_t command) {
-	/* channel 1 for acc_gain
-	 * channel 2 for gyro_gain
-	 * channel 3 for complement alpha
-	 *
-	 * command 0 for / 3
-	 * command else for * 3
-	 */
-	char usart_out[32];
-	switch (channel) {
-		case 1:
-			if (command)
-				acc_lowpass_gain *= 3;
-			else
-				acc_lowpass_gain /= 3;
-			UART1_puts("/r/n acc_gain :  ");
-			shell_float2str(acc_lowpass_gain, usart_out);
-			UART1_puts(usart_out);
-			break;
-		case 2:
-			if (command)
-				gyro_lowpass_gain *= 3;
-			else
-				gyro_lowpass_gain /= 3;
-			UART1_puts("/r/n gyro_gain :  ");
-			shell_float2str(gyro_lowpass_gain, usart_out);
-			UART1_puts(usart_out);
-			break;
-		case 3:
-			if (command)
-				complementAlpha *=3;
-			else
-				complementAlpha /= 3;
-			UART1_puts("/r/n alpha :  ");
-			shell_float2str(complementAlpha, usart_out);
-			UART1_puts(usart_out);
-			break;
+/** Set the I2C address of the specified slave (0-3).
+ * @param num Slave number (0-3)
+ * @param address New address for specified slave
+ * @see getSlaveAddress()
+ * @see MPU6050_RA_I2C_SLV0_ADDR
+ */
+void MPUsetSlaveAddress(uint8_t num, uint8_t address) {
+    if (num > 3) return;
+    I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_I2C_SLV0_ADDR + num*3, address);
+}
+
+/** Set I2C Master Mode enabled status.
+ * @param enabled New I2C Master Mode enabled status
+ * @see getI2CMasterModeEnabled()
+ * @see MPU6050_RA_USER_CTRL
+ * @see MPU6050_USERCTRL_I2C_MST_EN_BIT
+ */
+void MPUsetI2CMasterModeEnabled(uint8_t enabled) {
+    I2C_WriteBit(MPU6050_PWR_MGMT_1, MPU6050_USERCTRL_I2C_MST_EN_BIT, enabled);
+}
+
+/** Set full interrupt enabled status.
+ * Full register byte for all interrupts, for quick reading. Each bit should be
+ * set 0 for disabled, 1 for enabled.
+ * @param enabled New interrupt enabled status
+ * @see getIntFreefallEnabled()
+ * @see MPU6050_RA_INT_ENABLE
+ * @see MPU6050_INTERRUPT_FF_BIT
+ **/
+void MPUsetIntEnabled(uint8_t enabled) {
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_INT_ENABLE, enabled);
+}
+
+/** Reset the FIFO.
+ * This bit resets the FIFO buffer when set to 1 while FIFO_EN equals 0. This
+ * bit automatically clears to 0 after the reset has been triggered.
+ * @see MPU6050_RA_USER_CTRL
+ * @see MPU6050_USERCTRL_FIFO_RESET_BIT
+ */
+void MPUresetFIFO() {
+	I2C_WriteBit(MPU6050_USER_CTRL, MPU6050_USERCTRL_FIFO_RESET_BIT, 1);
+}
+
+/** Get current FIFO buffer size.
+ * This value indicates the number of bytes stored in the FIFO buffer. This
+ * number is in turn the number of bytes that can be read from the FIFO buffer
+ * and it is directly proportional to the number of samples available given the
+ * set of sensor data bound to be stored in the FIFO (register 35 and 36).
+ * @return Current FIFO buffer size
+ */
+uint16_t MPUgetFIFOCount() {
+	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_FIFO_COUNTH, MPUbuffer, 2);
+    return (((uint16_t)MPUbuffer[0]) << 8) | MPUbuffer[1];
+}
+
+/** Set free-fall event acceleration threshold.
+ * @param threshold New motion detection acceleration threshold value (LSB = 2mg)
+ * @see getMotionDetectionThreshold()
+ * @see MPU6050_RA_MOT_THR
+ */
+void MPUsetMotionDetectionThreshold(uint8_t threshold) {
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_MOTION_THRESH, threshold);
+}
+
+/** Set zero motion detection event acceleration threshold.
+ * @param threshold New zero motion detection acceleration threshold value (LSB = 2mg)
+ * @see getZeroMotionDetectionThreshold()
+ * @see MPU6050_RA_ZRMOT_THR
+ */
+void MPUsetZeroMotionDetectionThreshold(uint8_t threshold) {
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_ZRMOT_THR, threshold);
+}
+
+/** Set motion detection event duration threshold.
+ * @param duration New motion detection duration threshold value (LSB = 1ms)
+ * @see getMotionDetectionDuration()
+ * @see MPU6050_RA_MOT_DUR
+ */
+void MPUsetMotionDetectionDuration(uint8_t duration) {
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_MOT_DUR, duration);
+}
+
+/** Set zero motion detection event duration threshold.
+ * @param duration New zero motion detection duration threshold value (LSB = 1ms)
+ * @see getZeroMotionDetectionDuration()
+ * @see MPU6050_RA_ZRMOT_DUR
+ */
+void MPUsetZeroMotionDetectionDuration(uint8_t duration) {
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_ZRMOT_DUR, duration);
+}
+
+/** Set FIFO enabled status.
+ * @param enabled New FIFO enabled status
+ * @see getFIFOEnabled()
+ * @see MPU6050_RA_USER_CTRL
+ * @see MPU6050_USERCTRL_FIFO_EN_BIT
+ */
+void MPUsetFIFOEnabled(uint8_t enabled) {
+    I2C_WriteBit(MPU6050_USER_CTRL, MPU6050_USERCTRL_FIFO_EN_BIT, enabled);
+}
+
+/** Get full set of interrupt status bits.
+ * These bits clear to 0 after the register has been read. Very useful
+ * for getting multiple INT statuses, since each single bit read clears
+ * all of them because it has to read the whole byte.
+ * @return Current interrupt status
+ * @see MPU6050_RA_INT_STATUS
+ */
+uint8_t MPUgetIntStatus() {
+    return I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_INT_STATUS);
+}
+
+/** Reset the I2C Master.
+ * This bit resets the I2C Master when set to 1 while I2C_MST_EN equals 0.
+ * This bit automatically clears to 0 after the reset has been triggered.
+ * @see MPU6050_RA_USER_CTRL
+ * @see MPU6050_USERCTRL_I2C_MST_RESET_BIT
+ */
+void MPUresetI2CMaster() {
+    I2C_WriteBit(MPU6050_USER_CTRL, MPU6050_USERCTRL_I2C_MST_RESET_BIT, 1);
+}
+
+// FIFO_R_W register
+
+/** Get byte from FIFO buffer.
+ * This register is used to read and write data from the FIFO buffer. Data is
+ * written to the FIFO in order of register number (from lowest to highest). If
+ * all the FIFO enable flags (see below) are enabled and all External Sensor
+ * Data registers (Registers 73 to 96) are associated with a Slave device, the
+ * contents of registers 59 through 96 will be written in order at the Sample
+ * Rate.
+ *
+ * The contents of the sensor data registers (Registers 59 to 96) are written
+ * into the FIFO buffer when their corresponding FIFO enable flags are set to 1
+ * in FIFO_EN (Register 35). An additional flag for the sensor data registers
+ * associated with I2C Slave 3 can be found in I2C_MST_CTRL (Register 36).
+ *
+ * If the FIFO buffer has overflowed, the status bit FIFO_OFLOW_INT is
+ * automatically set to 1. This bit is located in INT_STATUS (Register 58).
+ * When the FIFO buffer has overflowed, the oldest data will be lost and new
+ * data will be written to the FIFO.
+ *
+ * If the FIFO buffer is empty, reading this register will return the last byte
+ * that was previously read from the FIFO until new data is available. The user
+ * should check FIFO_COUNT to ensure that the FIFO buffer is not read when
+ * empty.
+ *
+ * @return Byte from FIFO buffer
+ */
+uint8_t MPUgetFIFOByte() {
+    return I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_FIFO_R_W);
+}
+void MPUgetFIFOBytes(uint8_t *data, uint8_t length) {
+	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_FIFO_R_W, data, length);
+}
+
+//void set_gain(uint16_t channel, uint16_t command) {
+//	/* channel 1 for acc_gain
+//	 * channel 2 for gyro_gain
+//	 * channel 3 for complement alpha
+//	 *
+//	 * command 0 for / 3
+//	 * command else for * 3
+//	 */
+//	char usart_out[32];
+//	switch (channel) {
+//		case 1:
+//			if (command)
+//				acc_lowpass_gain *= 3;
+//			else
+//				acc_lowpass_gain /= 3;
+//			UART1_puts("/r/n acc_gain :  ");
+//			shell_float2str(acc_lowpass_gain, usart_out);
+//			UART1_puts(usart_out);
+//			break;
+//		case 2:
+//			if (command)
+//				gyro_lowpass_gain *= 3;
+//			else
+//				gyro_lowpass_gain /= 3;
+//			UART1_puts("/r/n gyro_gain :  ");
+//			shell_float2str(gyro_lowpass_gain, usart_out);
+//			UART1_puts(usart_out);
+//			break;
+//		case 3:
+//			if (command)
+//				complementAlpha *=3;
+//			else
+//				complementAlpha /= 3;
+//			UART1_puts("/r/n alpha :  ");
+//			shell_float2str(complementAlpha, usart_out);
+//			UART1_puts(usart_out);
+//			break;
+//	}
+//	delay(1000);
+//}
+
+
+// ======== UNDOCUMENTED/DMP REGISTERS/METHODS ========
+
+// XG_OFFS_TC register
+uint8_t MPUgetOTPBankValid() {
+    I2C_ReadBit(MPU6050_RA_XG_OFFS_TC, MPU6050_TC_OTP_BNK_VLD_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+
+void MPUsetOTPBankValid(uint8_t enabled) {
+    I2C_WriteBit(MPU6050_RA_XG_OFFS_TC, MPU6050_TC_OTP_BNK_VLD_BIT, enabled);
+}
+
+int8_t MPUgetXGyroOffset() {
+    I2C_ReadBits(MPU6050_RA_XG_OFFS_TC, MPU6050_TC_OFFSET_BIT, MPU6050_TC_OFFSET_LENGTH, MPUbuffer);
+    return MPUbuffer[0];
+}
+
+void MPUsetXGyroOffset(int8_t offset) {
+    I2C_WriteBits(MPU6050_RA_XG_OFFS_TC, MPU6050_TC_OFFSET_BIT, MPU6050_TC_OFFSET_LENGTH, offset);
+}
+
+// YG_OFFS_TC register
+int8_t MPUgetYGyroOffset() {
+    I2C_ReadBits(MPU6050_RA_YG_OFFS_TC, MPU6050_TC_OFFSET_BIT, MPU6050_TC_OFFSET_LENGTH, MPUbuffer);
+    return MPUbuffer[0];
+}
+void MPUsetYGyroOffset(int8_t offset) {
+    I2C_WriteBits(MPU6050_RA_YG_OFFS_TC, MPU6050_TC_OFFSET_BIT, MPU6050_TC_OFFSET_LENGTH, offset);
+}
+
+// ZG_OFFS_TC register
+int8_t MPUgetZGyroOffset() {
+    I2C_ReadBits(MPU6050_RA_ZG_OFFS_TC, MPU6050_TC_OFFSET_BIT, MPU6050_TC_OFFSET_LENGTH, MPUbuffer);
+    return MPUbuffer[0];
+}
+void MPUsetZGyroOffset(int8_t offset) {
+    I2C_WriteBits(MPU6050_RA_ZG_OFFS_TC, MPU6050_TC_OFFSET_BIT, MPU6050_TC_OFFSET_LENGTH, offset);
+}
+
+// X_FINE_GAIN register
+int8_t MPUgetXFineGain() {
+    return I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_X_FINE_GAIN);
+}
+void MPUsetXFineGain(int8_t gain) {
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_X_FINE_GAIN, gain);
+}
+
+// Y_FINE_GAIN register
+int8_t MPUgetYFineGain() {
+	return I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_Y_FINE_GAIN);
+}
+void MPUsetYFineGain(int8_t gain) {
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_Y_FINE_GAIN, gain);
+}
+
+// Z_FINE_GAIN register
+int8_t MPUgetZFineGain() {
+	return I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_Z_FINE_GAIN);
+}
+void MPUsetZFineGain(int8_t gain) {
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_Z_FINE_GAIN, gain);
+}
+
+// XA_OFFS_* registers
+int16_t MPUgetXAccelOffset() {
+	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_XA_OFFS_H, MPUbuffer, 2);
+    return (((int16_t)MPUbuffer[0]) << 8) | MPUbuffer[1];
+}
+void MPUsetXAccelOffset(int16_t offset) {
+	I2C_WriteWord(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_XA_OFFS_H, offset);
+}
+
+// YA_OFFS_* register
+
+int16_t MPUgetYAccelOffset() {
+	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_YA_OFFS_H, MPUbuffer, 2);
+    return (((int16_t)MPUbuffer[0]) << 8) | MPUbuffer[1];
+}
+void MPUsetYAccelOffset(int16_t offset) {
+	I2C_WriteWord(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_YA_OFFS_H, offset);
+}
+
+// ZA_OFFS_* register
+
+int16_t MPUgetZAccelOffset() {
+	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_ZA_OFFS_H, MPUbuffer, 2);
+    return (((int16_t)MPUbuffer[0]) << 8) | MPUbuffer[1];
+}
+void MPUsetZAccelOffset(int16_t offset) {
+	I2C_WriteWord(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_ZA_OFFS_H, offset);
+}
+
+// XG_OFFS_USR* registers
+
+int16_t MPUgetXGyroOffsetUser() {
+	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_XG_OFFS_USRH, MPUbuffer, 2);
+    return (((int16_t)MPUbuffer[0]) << 8) | MPUbuffer[1];
+}
+void MPUsetXGyroOffsetUser(int16_t offset) {
+	I2C_WriteWord(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_XG_OFFS_USRH, offset);
+}
+
+// YG_OFFS_USR* register
+
+int16_t MPUgetYGyroOffsetUser() {
+	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_YG_OFFS_USRH, MPUbuffer, 2);
+    return (((int16_t)MPUbuffer[0]) << 8) | MPUbuffer[1];
+}
+void MPUsetYGyroOffsetUser(int16_t offset) {
+	I2C_WriteWord(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_YG_OFFS_USRH, offset);
+}
+
+// ZG_OFFS_USR* register
+
+int16_t MPUgetZGyroOffsetUser() {
+	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_ZG_OFFS_USRH, MPUbuffer, 2);
+    return (((int16_t)MPUbuffer[0]) << 8) | MPUbuffer[1];
+}
+void MPUsetZGyroOffsetUser(int16_t offset) {
+	I2C_WriteWord(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_ZG_OFFS_USRH, offset);
+}
+
+// INT_ENABLE register (DMP functions)
+
+uint8_t MPUgetIntPLLReadyEnabled() {
+    I2C_ReadBit(MPU6050_INT_ENABLE, MPU6050_INTERRUPT_PLL_RDY_INT_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+void MPUsetIntPLLReadyEnabled(uint8_t enabled) {
+    I2C_WriteBit(MPU6050_INT_ENABLE, MPU6050_INTERRUPT_PLL_RDY_INT_BIT, enabled);
+}
+uint8_t MPUgetIntDMPEnabled() {
+    I2C_ReadBit(MPU6050_INT_ENABLE, MPU6050_INTERRUPT_DMP_INT_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+void MPUsetIntDMPEnabled(uint8_t enabled) {
+    I2C_WriteBit(MPU6050_INT_ENABLE, MPU6050_INTERRUPT_DMP_INT_BIT, enabled);
+}
+
+// DMP_INT_STATUS
+
+uint8_t MPUgetDMPInt5Status() {
+    I2C_ReadBit(MPU6050_RA_DMP_INT_STATUS, MPU6050_DMPINT_5_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+uint8_t MPUgetDMPInt4Status() {
+    I2C_ReadBit(MPU6050_RA_DMP_INT_STATUS, MPU6050_DMPINT_4_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+uint8_t MPUgetDMPInt3Status() {
+    I2C_ReadBit(MPU6050_RA_DMP_INT_STATUS, MPU6050_DMPINT_3_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+uint8_t MPUgetDMPInt2Status() {
+    I2C_ReadBit(MPU6050_RA_DMP_INT_STATUS, MPU6050_DMPINT_2_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+uint8_t MPUgetDMPInt1Status() {
+    I2C_ReadBit(MPU6050_RA_DMP_INT_STATUS, MPU6050_DMPINT_1_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+uint8_t MPUgetDMPInt0Status() {
+    I2C_ReadBit(MPU6050_RA_DMP_INT_STATUS, MPU6050_DMPINT_0_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+
+// INT_STATUS register (DMP functions)
+
+uint8_t MPUgetIntPLLReadyStatus() {
+    I2C_ReadBit(MPU6050_INT_STATUS, MPU6050_INTERRUPT_PLL_RDY_INT_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+uint8_t MPUgetIntDMPStatus() {
+	I2C_ReadBit(MPU6050_INT_STATUS, MPU6050_INTERRUPT_DMP_INT_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+
+// USER_CTRL register (DMP functions)
+
+uint8_t MPUgetDMPEnabled() {
+	I2C_ReadBit(MPU6050_USER_CTRL, MPU6050_USERCTRL_DMP_EN_BIT, MPUbuffer);
+    return MPUbuffer[0];
+}
+void MPUsetDMPEnabled(uint8_t enabled) {
+    I2C_WriteBit(MPU6050_USER_CTRL, MPU6050_USERCTRL_DMP_EN_BIT, enabled);
+}
+void MPUresetDMP() {
+    I2C_WriteBit(MPU6050_USER_CTRL, MPU6050_USERCTRL_DMP_RESET_BIT, 1);
+}
+
+// BANK_SEL register
+void MPUsetMemoryBank(uint8_t bank, uint8_t prefetchEnabled, uint8_t userBank) {
+    bank &= 0x1F;
+    if (userBank == 1) bank |= 0x20;
+    if (prefetchEnabled == 1) bank |= 0x40;
+    I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_BANK_SEL, bank);
+}
+
+// MEM_START_ADDR register
+void MPUsetMemoryStartAddress(uint8_t address) {
+    I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_MEM_START_ADDR, address);
+}
+
+// MEM_R_W register
+
+uint8_t MPUreadMemoryByte() {
+    return I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_MEM_R_W);
+}
+void MPUwriteMemoryByte(uint8_t data) {
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_MEM_R_W, data);
+}
+void MPUreadMemoryBlock(uint8_t *data, uint16_t dataSize, uint8_t bank,	uint8_t address) {
+	uint8_t chunkSize;
+	uint16_t i;
+	MPUsetMemoryBank(bank, 0, 0);
+	MPUsetMemoryStartAddress(address);
+
+	for (i = 0; i < dataSize;) {
+		// determine correct chunk size according to bank position and data size
+		chunkSize = MPU6050_DMP_MEMORY_CHUNK_SIZE;
+
+		// make sure we don't go past the data size
+		if (i + chunkSize > dataSize)
+			chunkSize = dataSize - i;
+
+		// make sure this chunk doesn't go past the bank boundary (256 bytes)
+		if (chunkSize > 256 - address)
+			chunkSize = 256 - address;
+
+		// read the chunk of data as specified
+		I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_MEM_R_W, data + i, chunkSize);
+
+		// increase byte index by [chunkSize]
+		i += chunkSize;
+
+		// uint8_t automatically wraps to 0 at 256
+		address += chunkSize;
+
+		// if we aren't done, update bank (if necessary) and address
+		if (i < dataSize) {
+			if (address == 0)
+				bank++;
+			MPUsetMemoryBank(bank, 0, 0);
+			MPUsetMemoryStartAddress(address);
+		}
 	}
-	delay(1000);
+}
+
+uint8_t MPUwriteMemoryBlock(const uint8_t *data, uint16_t dataSize, uint8_t bank,
+		uint8_t address, uint8_t verify, uint8_t useProgMem) {
+	/*
+	 verifyBuffer and progBuffer malloc/free has been removed, ProgMem support removed
+	 */
+	uint8_t chunkSize;
+	uint16_t i;
+	MPUsetMemoryBank(bank, 0, 0);
+	MPUsetMemoryStartAddress(address);
+	for (i = 0; i < dataSize;) {
+		// determine correct chunk size according to bank position and data size
+		chunkSize = MPU6050_DMP_MEMORY_CHUNK_SIZE;
+
+		// make sure we don't go past the data size
+		if (i + chunkSize > dataSize)
+			chunkSize = dataSize - i;
+
+		// make sure this chunk doesn't go past the bank boundary (256 bytes)
+		if (chunkSize > 256 - address)
+			chunkSize = 256 - address;
+
+		// write the chunk of data as specified
+//		MPUprogBuffer = (uint8_t *) data + i;
+
+		I2C_WriteBytes(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_MEM_R_W, chunkSize, (uint8_t *) data + i);
+
+		// verify data if needed
+		if (verify) {
+			MPUsetMemoryBank(bank, 0, 0);
+			MPUsetMemoryStartAddress(address);
+			I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_MEM_R_W, MPUverifyBuffer, chunkSize);
+			if (memcmp((uint8_t *) data + i, MPUverifyBuffer, chunkSize) != 0) {
+				return 0; // uh oh.
+			}
+		}
+
+		// increase byte index by [chunkSize]
+		i += chunkSize;
+
+		// uint8_t automatically wraps to 0 at 256
+		address += chunkSize;
+
+		// if we aren't done, update bank (if necessary) and address
+		if (i < dataSize) {
+			if (address == 0)
+				bank++;
+			MPUsetMemoryBank(bank, 0, 0);
+			MPUsetMemoryStartAddress(address);
+		}
+	}
+	return 1;
+}
+uint8_t MPUwriteProgMemoryBlock(const uint8_t *data, uint16_t dataSize, uint8_t bank, uint8_t address, uint8_t verify) {
+    return MPUwriteMemoryBlock(data, dataSize, bank, address, verify, 1);
+}
+uint8_t MPUwriteDMPConfigurationSet(const uint8_t *data, uint16_t dataSize,	uint8_t useProgMem) {
+	uint8_t success, special;
+	uint16_t i;
+
+	// config set data is a long string of blocks with the following structure:
+	// [bank] [offset] [length] [byte[0], byte[1], ..., byte[length]]
+	uint8_t bank, offset, length;
+	for (i = 0; i < dataSize;) {
+		bank = data[i++];
+		offset = data[i++];
+		length = data[i++];
+
+		// write data or perform special action
+		if (length > 0) {
+			//           MPUprogBuffer = (uint8_t *)data + i;
+			/* too few arguments in function call? added FALSE at the end */
+			success = MPUwriteMemoryBlock((uint8_t *) data + i, length, bank,
+					offset, 1, 1);
+			i += length;
+		} else {
+			// special instruction
+			// NOTE: this kind of behavior (what and when to do certain things)
+			// is totally undocumented. This code is in here based on observed
+			// behavior only, and exactly why (or even whether) it has to be here
+			// is anybody's guess for now.
+			special = data[i++];
+			/*Serial.print("Special command code ");
+			 Serial.print(special, HEX);
+			 Serial.println(" found...");*/
+			if (special == 0x01) {
+				// enable DMP-related interrupts
+
+				//setIntZeroMotionEnabled(TRUE);
+				//setIntFIFOBufferOverflowEnabled(TRUE);
+				//setIntDMPEnabled(TRUE);
+				I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_INT_ENABLE, 0x32);
+
+				success = 1;
+			} else {
+				// unknown special command
+				success = 0;
+			}
+		}
+
+		if (!success) {
+			return 0; // uh oh
+		}
+	}
+	return 1;
+}
+uint8_t MPUwriteProgDMPConfigurationSet(const uint8_t *data, uint16_t dataSize) {
+    return MPUwriteDMPConfigurationSet(data, dataSize, 1);
+}
+
+// DMP_CFG_1 register
+
+uint8_t MPUgetDMPConfig1() {
+    return I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_DMP_CFG_1);
+}
+void MPUsetDMPConfig1(uint8_t config) {
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_DMP_CFG_1, config);
+}
+
+// DMP_CFG_2 register
+
+uint8_t MPUgetDMPConfig2() {
+    return I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_DMP_CFG_2);
+}
+void MPUsetDMPConfig2(uint8_t config) {
+	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_RA_DMP_CFG_2, config);
 }
