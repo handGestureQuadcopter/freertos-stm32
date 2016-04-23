@@ -6,9 +6,6 @@
 extern C {
 #endif
 
-#include <math.h>
-#include <string.h>
-
 #include "FreeRTOS.h"
 #include "task.h"
 #include "misc.h"
@@ -22,8 +19,6 @@ typedef struct {
 }Angle_Data;
 
 #define RAD_TO_DEG 57.2957795130823208768f
-#define DEG_TO_RAD 0.01745329251994329577f
-#define M_PI 3.14159265359
 
 #define MPU6050_DMP_MEMORY_BANKS        8
 #define MPU6050_DMP_MEMORY_BANK_SIZE    256
@@ -183,7 +178,7 @@ extern uint8_t MPUverifyBuffer[MPU6050_DMP_MEMORY_CHUNK_SIZE];
 #define MPU6050_CFG_DLPF_CFG_BIT    2
 #define MPU6050_CFG_DLPF_CFG_LENGTH 3
 
-/* Gyro sensitivities in °/s */
+/* Gyro sensitivities in /s */
 #define MPU6050_GYRO_SENS_250		((float) 131)
 #define MPU6050_GYRO_SENS_500		((float) 65.5)
 #define MPU6050_GYRO_SENS_1000		((float) 32.8)
@@ -237,26 +232,10 @@ typedef enum {
 } TM_MPU6050_Gyroscope_t;
 
 /**
- * @brief  Main MPU6050 structure
- */
-typedef struct {
-	/* Private */
-	float Gyro_Mult;         /*!< Gyroscope corrector from raw data to "degrees/s". Only for private use */
-	float Acce_Mult;         /*!< Accelerometer corrector from raw data to "g". Only for private use */
-	/* Public */
-	int16_t Accelerometer_X; /*!< Accelerometer value X axis */
-	int16_t Accelerometer_Y; /*!< Accelerometer value Y axis */
-	int16_t Accelerometer_Z; /*!< Accelerometer value Z axis */
-	int16_t Gyroscope_X;     /*!< Gyroscope value X axis */
-	int16_t Gyroscope_Y;     /*!< Gyroscope value Y axis */
-	int16_t Gyroscope_Z;     /*!< Gyroscope value Z axis */
-} TM_MPU6050_t;
-
-/**
  * @}
  */
 
-void MPU6050Task(void);
+void MPU6050Task(void *pvParameters);
 
 /**
  * @defgroup TM_MPU6050_Functions
@@ -282,33 +261,6 @@ void MPU6050Task(void);
 TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensitivity, TM_MPU6050_Gyroscope_t GyroscopeSensitivity);
 
 /**
- * @brief  Reads accelerometer data from sensor
- * @param  *DataStruct: Pointer to @ref TM_MPU6050_t structure to store data to
- * @retval Member of @ref TM_MPU6050_Result_t:
- *            - TM_MPU6050_Result_Ok: everything is OK
- *            - Other: in other cases
- */
-TM_MPU6050_Result_t MPU6050_ReadAccelerometer();
-
-/**
- * @brief  Reads gyroscope data from sensor
- * @param  *DataStruct: Pointer to @ref TM_MPU6050_t structure to store data to
- * @retval Member of @ref TM_MPU6050_Result_t:
- *            - TM_MPU6050_Result_Ok: everything is OK
- *            - Other: in other cases
- */
-TM_MPU6050_Result_t MPU6050_ReadGyroscope();
-
-/**
- * @brief  Reads accelerometer, gyroscope and temperature data from sensor
- * @param  *DataStruct: Pointer to @ref TM_MPU6050_t structure to store data to
- * @retval Member of @ref TM_MPU6050_Result_t:
- *            - TM_MPU6050_Result_Ok: everything is OK
- *            - Other: in other cases
- */
-TM_MPU6050_Result_t MPU6050_ReadAccGyo();
-
-/**
  * @}
  */
 
@@ -317,10 +269,6 @@ uint8_t MPU6050_I2C_IsDeviceConnected(uint8_t address);
 uint8_t MPU6050_Task_Creat();
 
 void Init_MPU6050();
-
-void Enable_TIM2_INTERRUPT();
-
-//void set_gain(uint16_t channel, uint16_t command);
 
 void MPUsetSlaveAddress(uint8_t num, uint8_t address);
 
@@ -448,10 +396,6 @@ void MPUgetFIFOBytes(uint8_t *data, uint8_t length);
 	// DMP_CFG_2 register
 	uint8_t MPUgetDMPConfig2(void);
 	void MPUsetDMPConfig2(uint8_t config);
-
-	/**
-	 * @}
-	 */
  
 /**
  * @}

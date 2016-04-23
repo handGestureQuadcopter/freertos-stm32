@@ -4,17 +4,14 @@
 #include "uart.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 
-uint8_t MPUbuffer[14];
+#include <string.h>
 
-#define SENSOR_PERIOD_MS 50
-
-#define Square(x) ((x)*(x))
-#define Lowpass(old, new, alpha) ((1.0f - alpha) * old + alpha * new)
+#define SENSOR_PERIOD_MS 20
 
 xTaskHandle xSensorHandle;
 Angle_Data Angle;
-static TM_MPU6050_t MPU6050_Data;
 
+uint8_t MPUbuffer[14];
 uint8_t *MPUdmpPacketBuffer;
 const uint16_t MPUdmpPacketSize = 42;
 uint8_t MPUverifyBuffer[MPU6050_DMP_MEMORY_CHUNK_SIZE];
@@ -23,11 +20,10 @@ uint8_t MPUbuffer[14];
 uint16_t MPUfifoCount;     	// count of all bytes currently in FIFO
 uint8_t  MPUfifoBuffer[64];	// FIFO storage buffer
 
-void MPU6050Task(void) {
+void MPU6050Task(void *pvParameters) {
 	char uart_out[32];
 
 	uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
-	uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
 	uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
 	uint16_t fifoCount;     // count of all bytes currently in FIFO
 	uint8_t fifoBuffer[64]; // FIFO storage buffer
@@ -37,12 +33,11 @@ void MPU6050Task(void) {
 	float roll, pitch;
 
 	MPUdmpInitialize();
-	MPUsetDMPEnabled(1);
+	MPUsetDMPEnabled(TRUE);
 
 	mpuIntStatus = MPUgetIntStatus();
 	packetSize = MPUdmpGetFIFOPacketSize();
 
-	Enable_TIM2_INTERRUPT();
 	while (1) {
 
 		mpuIntStatus = MPUgetIntStatus();
@@ -58,29 +53,14 @@ void MPU6050Task(void) {
 
 			MPUdmpGetQuaternion(&q, fifoBuffer);
 			MPUdmpGetEuler(euler, &q);
-
-//			sprintf(str_main, "#:%.2f:%.2f:%.2f\n", euler[0] * 180 / M_PI,
-//					euler[2] * 180 / M_PI, euler[1] * 180 / M_PI);
-//			USART_puts(USART1, str_main);
-//			//printf("Yaw: %.2f  Pitch: %.2f Roll: %.2f\n", euler[0]* 180/M_PI, euler[2]* 180/M_PI, euler[1]* 180/M_PI);
 		}
-		pitch = euler[2] * 180 / M_PI;
-		roll = euler[1] * 180 / M_PI;
+		pitch = euler[2] * RAD_TO_DEG;
+		roll = euler[1] * RAD_TO_DEG;
 
 		taskENTER_CRITICAL();
-//		Angle.Roll = roll;
-//		Angle.Pitch = pitch;
+		Angle.Roll = roll;
+		Angle.Pitch = pitch;
 		taskEXIT_CRITICAL();
-
-//		UART1_puts("\r\n");
-//		shell_float2str(scale_gyroX, uart_out);
-//		UART1_puts(uart_out);
-//		UART1_puts(" ");
-//		shell_float2str(scale_gyroY, uart_out);
-//		UART1_puts(uart_out);
-//		UART1_puts(" ");
-//		shell_float2str(scale_gyroZ, uart_out);
-//		UART1_puts(uart_out);
 
 		UART1_puts("\r\n");
 		shell_float2str(roll, uart_out);
@@ -89,7 +69,7 @@ void MPU6050Task(void) {
 		shell_float2str(pitch, uart_out);
 		UART1_puts(uart_out);
 		
-		vTaskSuspend(xSensorHandle);
+		vTaskDelay(SENSOR_PERIOD_MS / portTICK_PERIOD_MS);
 	}
 }
 
@@ -98,10 +78,6 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 	uint8_t temp;
 
 	I2C_MPU6050_Init(MPU6050_I2C, MPU6050_I2C_CLOCK);
-
-//	// reset
-//	I2C_WriteBit(MPU6050_PWR_MGMT_1, 8, 1);
-//	delay(3000000);
 
 	/* Check if device is connected */
 	if (!MPU6050_I2C_IsDeviceConnected(MPU6050_I2C_ADDR)) {
@@ -121,12 +97,6 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 	// Disable Sleep
 	I2C_WriteBit(MPU6050_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, 0);
 
-//	// Enable low-pass filter
-//	I2C_WriteBit(MPU6050_CONFIG, 0, 1);
-
-//	// Gyroscope sample output rate = 1kH / (1+ 1)
-//	I2C_WriteBit(MPU6050_SMPLRT_DIV, 0, 1);
-
 	/* Config accelerometer */
 	temp = I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_ACCEL_CONFIG);
 	temp = (temp & 0xE7) | (uint8_t)AccelerometerSensitivity << 3;
@@ -136,91 +106,6 @@ TM_MPU6050_Result_t MPU6050_Init(TM_MPU6050_Accelerometer_t AccelerometerSensiti
 	temp = I2C_Read(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_GYRO_CONFIG);
 	temp = (temp & 0xE7) | (uint8_t)GyroscopeSensitivity << 3;
 	I2C_Write(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_GYRO_CONFIG, temp);
-	
-	/* Set sensitivities for multiplying gyro and accelerometer data */
-	switch (AccelerometerSensitivity) {
-		case TM_MPU6050_Accelerometer_2G:
-			MPU6050_Data.Acce_Mult = (float)1 / MPU6050_ACCE_SENS_2;
-			break;
-		case TM_MPU6050_Accelerometer_4G:
-			MPU6050_Data.Acce_Mult = (float)1 / MPU6050_ACCE_SENS_4;
-			break;
-		case TM_MPU6050_Accelerometer_8G:
-			MPU6050_Data.Acce_Mult = (float)1 / MPU6050_ACCE_SENS_8;
-			break;
-		case TM_MPU6050_Accelerometer_16G:
-			MPU6050_Data.Acce_Mult = (float)1 / MPU6050_ACCE_SENS_16;
-			break;
-		default:
-			break;
-	}
-	
-	switch (GyroscopeSensitivity) {
-		case TM_MPU6050_Gyroscope_250s:
-			MPU6050_Data.Gyro_Mult = (float)1 / MPU6050_GYRO_SENS_250;
-			break;
-		case TM_MPU6050_Gyroscope_500s:
-			MPU6050_Data.Gyro_Mult = (float)1 / MPU6050_GYRO_SENS_500;
-			break;
-		case TM_MPU6050_Gyroscope_1000s:
-			MPU6050_Data.Gyro_Mult = (float)1 / MPU6050_GYRO_SENS_1000;
-			break;
-		case TM_MPU6050_Gyroscope_2000s:
-			MPU6050_Data.Gyro_Mult = (float)1 / MPU6050_GYRO_SENS_2000;
-			break;
-		default:
-			break;
-	}
-
-	/* Return OK */
-	return TM_MPU6050_Result_Ok;
-}
-
-TM_MPU6050_Result_t MPU6050_ReadAccelerometer() {
-	uint8_t data[6];
-	
-	/* Read accelerometer data */
-	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_ACCEL_XOUT_H, data, 6);
-	
-	/* Format */
-	MPU6050_Data.Accelerometer_X = (int16_t)(data[0] << 8 | data[1]);
-	MPU6050_Data.Accelerometer_Y = (int16_t)(data[2] << 8 | data[3]);
-	MPU6050_Data.Accelerometer_Z = (int16_t)(data[4] << 8 | data[5]);
-	
-	/* Return OK */
-	return TM_MPU6050_Result_Ok;
-}
-
-TM_MPU6050_Result_t MPU6050_ReadGyroscope() {
-	uint8_t data[6];
-	
-	/* Read gyroscope data */
-	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_GYRO_XOUT_H, data, 6);
-	
-	/* Format */
-	MPU6050_Data.Gyroscope_X = (int16_t)(data[0] << 8 | data[1]);
-	MPU6050_Data.Gyroscope_Y = (int16_t)(data[2] << 8 | data[3]);
-	MPU6050_Data.Gyroscope_Z = (int16_t)(data[4] << 8 | data[5]);
-
-	/* Return OK */
-	return TM_MPU6050_Result_Ok;
-}
-
-TM_MPU6050_Result_t MPU6050_ReadAccGyo() {
-	uint8_t data[14];
-	
-	/* Read full raw data, 14bytes */
-	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_ACCEL_XOUT_H, data, 14);
-	
-	/* Format accelerometer data */
-	MPU6050_Data.Accelerometer_X = (int16_t)(data[0] << 8 | data[1]);
-	MPU6050_Data.Accelerometer_Y = (int16_t)(data[2] << 8 | data[3]);
-	MPU6050_Data.Accelerometer_Z = (int16_t)(data[4] << 8 | data[5]);
-
-	/* Format gyroscope data */
-	MPU6050_Data.Gyroscope_X = (int16_t)(data[8] << 8 | data[9]);
-	MPU6050_Data.Gyroscope_Y = (int16_t)(data[10] << 8 | data[11]);
-	MPU6050_Data.Gyroscope_Z = (int16_t)(data[12] << 8 | data[13]);
 
 	/* Return OK */
 	return TM_MPU6050_Result_Ok;
@@ -260,36 +145,6 @@ void Init_MPU6050() {
 		UART1_puts("\r\nRemote is NOT READY! PLEASE Checkout.");
 	}
 	UART1_puts("\r\nRemote is ready to use!");
-}
-
-void Enable_TIM2_INTERRUPT() {
-	NVIC_InitTypeDef NVIC_InitStructure;
-	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
-
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
-
-	NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
-
-	TIM_TimeBaseStructure.TIM_Period = SENSOR_PERIOD_MS - 1;
-	TIM_TimeBaseStructure.TIM_Prescaler = 168000 - 1;
-	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
-	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
-	TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
-	TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
-
-	TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
-	TIM_Cmd(TIM2, ENABLE);
-}
-
-void TIM2_IRQHandler(void) {
-	if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
-		TIM_ClearITPendingBit(TIM2, TIM_FLAG_Update);
-		vTaskResume(xSensorHandle);
-	}
 }
 
 /** Set the I2C address of the specified slave (0-3).
@@ -447,48 +302,6 @@ uint8_t MPUgetFIFOByte() {
 void MPUgetFIFOBytes(uint8_t *data, uint8_t length) {
 	I2C_ReadMulti(MPU6050_I2C, MPU6050_I2C_ADDR, MPU6050_FIFO_R_W, data, length);
 }
-
-//void set_gain(uint16_t channel, uint16_t command) {
-//	/* channel 1 for acc_gain
-//	 * channel 2 for gyro_gain
-//	 * channel 3 for complement alpha
-//	 *
-//	 * command 0 for / 3
-//	 * command else for * 3
-//	 */
-//	char usart_out[32];
-//	switch (channel) {
-//		case 1:
-//			if (command)
-//				acc_lowpass_gain *= 3;
-//			else
-//				acc_lowpass_gain /= 3;
-//			UART1_puts("/r/n acc_gain :  ");
-//			shell_float2str(acc_lowpass_gain, usart_out);
-//			UART1_puts(usart_out);
-//			break;
-//		case 2:
-//			if (command)
-//				gyro_lowpass_gain *= 3;
-//			else
-//				gyro_lowpass_gain /= 3;
-//			UART1_puts("/r/n gyro_gain :  ");
-//			shell_float2str(gyro_lowpass_gain, usart_out);
-//			UART1_puts(usart_out);
-//			break;
-//		case 3:
-//			if (command)
-//				complementAlpha *=3;
-//			else
-//				complementAlpha /= 3;
-//			UART1_puts("/r/n alpha :  ");
-//			shell_float2str(complementAlpha, usart_out);
-//			UART1_puts(usart_out);
-//			break;
-//	}
-//	delay(1000);
-//}
-
 
 // ======== UNDOCUMENTED/DMP REGISTERS/METHODS ========
 

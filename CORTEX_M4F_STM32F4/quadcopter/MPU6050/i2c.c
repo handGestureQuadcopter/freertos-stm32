@@ -1,4 +1,5 @@
 #include "i2c.h"
+#include "uart.h"
 #include "mpu6050.h"
 
 static uint32_t MPU6050_I2C_Timeout;
