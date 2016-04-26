@@ -4,9 +4,7 @@
 #include "uart.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 
-#include <string.h>
-
-#define SENSOR_PERIOD_MS 20
+#define SENSOR_PERIOD_MS 10
 
 xTaskHandle xSensorHandle;
 Angle_Data Angle;
@@ -29,8 +27,9 @@ void MPU6050Task(void *pvParameters) {
 	uint8_t fifoBuffer[64]; // FIFO storage buffer
 
 	Quaternion q;           // [w, x, y, z]         quaternion container
-	float euler[3];         // [psi, theta, phi]    Euler angle container
+	VectorFloat gravity;
 	float roll, pitch;
+	float attitude[3];         // [yaw, roll, pitch]
 
 	MPUdmpInitialize();
 	MPUsetDMPEnabled(TRUE);
@@ -44,7 +43,7 @@ void MPU6050Task(void *pvParameters) {
 		fifoCount = MPUgetFIFOCount();
 		if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
 			MPUresetFIFO();
-			UART1_puts("FIFO overflow!");
+//			UART1_puts("\r\nFIFO overflow!\r\n");
 		} else if (mpuIntStatus & 0x02) {
 			while (fifoCount < packetSize)
 				fifoCount = MPUgetFIFOCount();
@@ -52,10 +51,11 @@ void MPU6050Task(void *pvParameters) {
 			fifoCount -= packetSize;
 
 			MPUdmpGetQuaternion(&q, fifoBuffer);
-			MPUdmpGetEuler(euler, &q);
+			MPUdmpGetGravityVect(&gravity, &q);
+			MPUdmpGetYawPitchRoll(attitude, &q, &gravity);
+			roll = attitude[1] * RAD_TO_DEG;
+			pitch = -attitude[2] * RAD_TO_DEG;
 		}
-		pitch = euler[2] * RAD_TO_DEG;
-		roll = euler[1] * RAD_TO_DEG;
 
 		taskENTER_CRITICAL();
 		Angle.Roll = roll;
@@ -68,7 +68,7 @@ void MPU6050Task(void *pvParameters) {
 		UART1_puts(" ");
 		shell_float2str(pitch, uart_out);
 		UART1_puts(uart_out);
-		
+
 		vTaskDelay(SENSOR_PERIOD_MS / portTICK_PERIOD_MS);
 	}
 }

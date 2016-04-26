@@ -313,7 +313,7 @@ uint8_t MPUdmpInitialize(){
     MPUsetSlaveAddress(FALSE, 0x68);
     UART1_puts("\nResetting I2C Master control...");
     MPUresetI2CMaster();
-    delay(2000000);
+    delay(3000000);
 
     // load DMP code into memory banks
     if (MPUwriteProgMemoryBlock(dmpMemory, MPU6050_DMP_CODE_SIZE, FALSE, FALSE, TRUE)) {

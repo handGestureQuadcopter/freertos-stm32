@@ -69,8 +69,6 @@ void PIDTask()
 	UART1_puts("WAIT FOR ESC\r\n\0");
 	vTaskDelay(5000);
 	UART1_puts("Start PID\r\n\0");
-	setSetPointX(Angle.Roll);
-	setSetPointY(Angle.Pitch);
 	
 	while(1){
 		taskENTER_CRITICAL();
@@ -142,18 +140,4 @@ void PID_Y(float error, float integral, float derivative)
 	motorspeed.magicNumber2 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber2 - output));
 	motorspeed.magicNumber3 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber3 + output));
 	motorspeed.magicNumber4 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber4 + output));
-}
-
-void PID_run(float errorX, float errorY, float integral, float derivative)
-{
-	float outputX, outputY;
-	outputX = (KP * errorX) + (KI * integral) + (KD * derivative);
-	outputX = LOWWER_BOUND(UPPER_BOUND(outputX));
-	outputY = (KP * errorY) + (KI * integral) + (KD * derivative);
-	outputY = LOWWER_BOUND(UPPER_BOUND(outputY));
-	motorspeed.magicNumber1 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber1 + outputX - outputY));
-	motorspeed.magicNumber2 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber2 - outputX - outputY));
-	motorspeed.magicNumber3 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber3 - outputX + outputY));
-	motorspeed.magicNumber4 = MAGIC_FLOOR(MAGIC_CEILING(motorspeed.magicNumber4 + outputX + outputY));
-	Change_Speed();
 }

@@ -27,4 +27,3 @@ float getSetPointX();
 float getSetPointY();
 float setSetPointX(float setting);
 float setSetPointY(float setting);
-void PID_run(float errorX, float errorY, float integral, float derivative);
