@@ -62,12 +62,12 @@ void MPU6050Task(void *pvParameters) {
 		Angle.Pitch = pitch;
 		taskEXIT_CRITICAL();
 
-		UART1_puts("\r\n");
-		shell_float2str(roll, uart_out);
-		UART1_puts(uart_out);
-		UART1_puts(" ");
-		shell_float2str(pitch, uart_out);
-		UART1_puts(uart_out);
+		//UART1_puts("\r\n");
+		//shell_float2str(roll, uart_out);
+		//UART1_puts(uart_out);
+		//UART1_puts(" ");
+		//shell_float2str(pitch, uart_out);
+		//UART1_puts(uart_out);
 
 		vTaskDelay(SENSOR_PERIOD_MS / portTICK_PERIOD_MS);
 	}
