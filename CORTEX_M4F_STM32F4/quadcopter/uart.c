@@ -1,9 +1,13 @@
 #include "uart.h"
 #include "shell.h"
 #include "pid.h"
+#include "esp8266.h"
 
 char buffer[MAX_UART_INPUT];
 uint8_t buffer_index = 0;
+//char buffer6[MAX_UART_INPUT];
+//uint8_t buffer6_index = 0;
+
 extern MotorSpeed_t motorspeed;
 extern Angle_Data Angle;
 
@@ -48,7 +52,61 @@ void UART1_Configuration()
 
 	/* enable uart interrupt while receiving char */
 	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+	NVIC_SetPriority(USART1_IRQn, 15);
 	NVIC_EnableIRQ(USART1_IRQn);
+}
+
+void UART6_RCC_Configuration()
+{
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART6, ENABLE);
+	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);
+}
+
+void UART6_GPIO_Configuration()
+{
+	GPIO_InitTypeDef GPIO_InitStructure;
+
+	/* UART config */
+	GPIO_StructInit(&GPIO_InitStructure);
+
+	/*-------------------------- GPIO Configuration ----------------------------*/
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_7;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+	/* Connect USART pins to AF */
+	GPIO_PinAFConfig(GPIOC, GPIO_PinSource6, GPIO_AF_USART6);   // USART6_TX
+	GPIO_PinAFConfig(GPIOC, GPIO_PinSource7, GPIO_AF_USART6);   // USART6_RX
+}
+
+void UART6_Configuration()
+{
+	USART_InitTypeDef USART_InitStructure;
+
+	/* USARTx configuration ------------------------------------------------------*/
+	/* USARTx configured as follow:
+	 *  - BaudRate = 115200 baud
+	 *  - Word Length = 8 Bits
+	 *  - One Stop Bit
+	 *  - No parity
+	 *  - Hardware flow control disabled (RTS and CTS signals)
+	 *  - Receive and transmit enabled
+	 */
+	USART_InitStructure.USART_BaudRate = 57600;
+	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+	USART_InitStructure.USART_StopBits = USART_StopBits_1;
+	USART_InitStructure.USART_Parity = USART_Parity_No;
+	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+	USART_Init(USART6, &USART_InitStructure);
+	USART_Cmd(USART6, ENABLE);
+
+	USART_ITConfig(USART6, USART_IT_RXNE, ENABLE);
+	NVIC_SetPriority(USART6_IRQn, 0);
+	NVIC_EnableIRQ(USART6_IRQn);
 }
 
 void Init_UART1()
@@ -59,6 +117,15 @@ void Init_UART1()
 	UART1_puts("UART1 Init\r\n\0");
 }
 
+void Init_UART6()
+{
+	UART6_RCC_Configuration();
+	UART6_GPIO_Configuration();
+	UART6_Configuration();
+	Enable_TIM3_INTERRUPT();
+	UART1_puts("UART6 Init\r\n\0");
+}
+
 void UART1_puts(char* s)
 {
 	while(*s != '\0') {
@@ -66,6 +133,15 @@ void UART1_puts(char* s)
 		USART_SendData(USART1, *s);
 		s++;
 	}
+}
+
+void UART6_puts(char* s)
+{
+    while(*s) {
+        while(USART_GetFlagStatus(USART6, USART_FLAG_TXE) == RESET);
+        USART_SendData(USART6, *s);
+        s++;
+    }
 }
 
 void UART1_int(uint16_t num)
@@ -103,9 +179,32 @@ void UART1_ReadLine()
 	} else {
 		buffer[buffer_index++] = c;
 	}
-	if (buffer_index == 50)
+	if (buffer_index == MAX_UART_INPUT)
 		buffer_index = 0;
 }
+
+void USART6_IRQHandler() {
+	/*
+	 * read a line from uart6
+	 */
+	UART6_ReadLine();
+}
+
+//void UART6_ReadLine() {
+//	while (USART_GetFlagStatus(USART6, USART_FLAG_RXNE) == RESET);
+//	char c = USART_ReceiveData(USART6);
+////	if (c == '\n' && buffer6[buffer6_index-1] == '\r') {
+////		buffer6[buffer6_index++] = '\n';
+////		buffer6[buffer6_index] = '\0';
+////		UART1_puts(buffer6);
+////		buffer6_index = 0;
+////	} else if (c != '\n'){
+//		buffer6[buffer6_index++] = c;
+////	}
+//	if (buffer6_index >= MAX_UART_INPUT)
+//		buffer6_index = 0;
+//}
+
 uint16_t myatoi(char *str)
 {	
 	uint16_t num = 0;
@@ -248,5 +347,16 @@ void remote_ctrl(char *str)
 			}
 			Change_Speed();
 			break;
+		case 9:
+			if (command == 0)
+				sendAT();
+			if (command == 100)
+				putbuffer6();
+			break;
 	}
+}
+
+void wifi_ctrl(char *str)
+{
+
 }

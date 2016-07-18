@@ -32,6 +32,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "semphr.h"
+#include "esp8266.h"
 
 #include "stm32f4xx_conf.h"
 
@@ -42,15 +43,19 @@ int main(void)
 {
 	//Configurations
 	Init_UART1();
-	Init_Motor(PID_xHandle);
-	Init_MPU6050();
+	Init_UART6();
+//	Init_Motor(PID_xHandle);
+//	Init_MPU6050();
 
-	if (!MPU6050_Task_Creat()) {
-		UART1_puts("Initialize information task failed!\r\n");
-	}
-	if (!PID_Task_Creat(PID_xHandle)) {
-		UART1_puts("Initialize information task failed!\r\n");
-	}
+//	if (!MPU6050_Task_Creat()) {
+//		UART1_puts("Initialize information task failed!\r\n");
+//	}
+//	if (!PID_Task_Creat(PID_xHandle)) {
+//		UART1_puts("Initialize information task failed!\r\n");
+//	}
+//	if (!ESP8266_Task_Creat()) {
+//		UART1_puts("Initialize information task failed!\r\n");
+//	}
 
 	vTaskStartScheduler();
 }
